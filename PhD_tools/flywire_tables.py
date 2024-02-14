@@ -151,8 +151,8 @@ def connectivity_summary(ids, return_conn = False):
         pre_ids[i] = len(pre_id)
         post_ids[i] = len(post_id)
         # bool ind of is proofread
-        pre_proof = np.isin(pre_id,proof_table.pt_root_id)
-        post_proof = np.isin(post_id,proof_table.pt_root_id)
+        pre_proof = np.isin(pre_id,proof_table.pt_root_id.values)
+        post_proof = np.isin(post_id,proof_table.pt_root_id.values)
         # number of proofread inputs / outputs
         in_proof[i] = pre_proof.sum()
         out_proof[i] = post_proof.sum()

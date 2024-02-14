@@ -117,8 +117,6 @@ def mahalanobis_distance(x:float, expectancy:float, cov:float, absolute:bool = F
     """Calculates the Mahalanobis distance between a vector x and a distribution
     with mean expectancy and covariance matrix cov. 
 
-    NOTE THIS IS WRONG - NEED TO FIX BUT NOT CURRENTLY USING IT.
-
     Parameters:
         x (np.ndarray): Vector to calculate distance for
         expectancy (np.ndarray): Mean of distribution
