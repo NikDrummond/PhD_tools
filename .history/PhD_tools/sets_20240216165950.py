@@ -43,29 +43,16 @@ def Sfamily_union(fam: list) -> np.array:
 
     return np.array(list(union_set))
 
-def Sfamily_XOR(fam: list) -> np.array:
+def Sfamily_XOR(fam:list) -> np.array:
     """
-    Returns the symmetric difference of a family of sets - union with the intersection removed.
+    returns the symetrical difference of a family of sets - union with the intersection removed
     """
-    # Input validation
-    if not fam or not all(isinstance(s, (set, np.ndarray)) for s in fam):
-        raise ValueError("Input must be a non-empty list of sets or arrays.")
+    intersection = fam[0]
+    union = fam[0]
+    for i in range(1,len(fam)):
+        intersection = np.intersect1d(intersection,fam[i])
+        union = np.union1d(union,fam[i])
 
-    # Early exit if there's only one set in the family
-    if len(fam) == 1:
-        return np.array(list(fam[0]))
-
-    # Convert arrays to sets
-    fam_sets = [set(arr) for arr in fam]
-
-    # Calculate intersection and union
-    intersection = fam_sets[0]
-    union = fam_sets[0]
-    for s in fam_sets[1:]:
-        intersection &= s
-        union |= s
-
-    # Calculate symmetric difference
-    x_or = np.array(list(union - intersection))
+    x_or = union[~np.isin(union,intersection)]
 
     return x_or
