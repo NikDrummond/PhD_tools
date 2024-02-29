@@ -50,7 +50,7 @@ def long_lat(pnt, origin, r):
     return np.array([long, lat])
 
 
-def mercator_proj(lnglat, r, truncate=False):
+def mercator_proj(lnglat, truncate=False):
     """Convert longitude and latitude to web mercator x, y
     Parameters
     ----------
@@ -72,6 +72,6 @@ def mercator_proj(lnglat, r, truncate=False):
     if truncate:
         lng = np.clip(lng, -180.0, 180.0)
         lat = np.clip(lng, -90.0, 90.0)
-    x = r * np.radians(lng)
-    y = r * np.log(np.tan((np.pi * 0.25) + (0.5 * np.radians(lat))))
+    x = 6378137.0 * np.radians(lng)
+    y = 6378137.0 * np.log(np.tan((np.pi * 0.25) + (0.5 * np.radians(lat))))
     return np.array((x, y)).T
