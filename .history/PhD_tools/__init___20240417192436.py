@@ -5,5 +5,4 @@ from .mercator import *
 from .rotations import *
 from .maths import *
 from .TMD_plotting import *
-from .latices import *
-from .steiner import *
+from .latice
