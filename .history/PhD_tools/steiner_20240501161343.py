@@ -279,29 +279,3 @@ def get_terminals(N, lookup, method="leaves"):
     terminals.append(root)
 
     return terminals, root
-
-
-def clean_stein_output(g, root = None):
-    """_summary_
-
-    Parameters
-    ----------
-    g : _type_
-        _description_
-    root : _type_, optional
-        _description_, by default None
-
-    Returns
-    -------
-    _type_
-        _description_
-    """
-    N_stein = nr.Tree_graph(name = None, graph = g)
-    vprop = N_stein.graph.new_vp('double')
-    vprop.a = 1
-    N_stein.graph.vp['radius'] = vprop
-    if root is None:
-        root = nr.g_root_ind(N_stein)
-    root_stein = nr.reroot_tree(N_stein, root, prune = False)
-    root_stein = nr.simplify_neuron(root_stein)
-    return root_stein
