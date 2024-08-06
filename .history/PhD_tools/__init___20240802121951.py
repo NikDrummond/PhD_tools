@@ -5,5 +5,6 @@ from .mercator import *
 from .rotations import *
 from .maths import *
 from .TMD_plotting import *
-from .latice_graph import *
-form .steiner import *
+from .latices import *
+from .steiner import *
+from .Pre-Processing
