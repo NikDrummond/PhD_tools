@@ -32,6 +32,6 @@ def identify_polyads(df, t):
             Z = linkage(coords, method = 'single', metric = 'euclidean')
             labels = fcluster(Z,t = t, criterion = 'distance')
             labels = labels + count
-            df.loc[df.pre == in_N,'pre_id'] = labels
+            df.loc[dfs.pre == in_N,'pre_id'] = labels
             count = labels.max()
     return df
