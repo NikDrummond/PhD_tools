@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
-from tqdm import tqdm
 
 
 
@@ -54,7 +53,7 @@ def get_polyads(df):
     dict
         mapping from synapse ID to post-synaptic neuron ids    
     """
-    data =df[['pre','post_x','post_y','post_z','post','pre_id']].values.astype(int)
+    data =dfs[['pre','post_x','post_y','post_z','post','pre_id']].values.astype(int)
     ids = np.unique(data[:,5])
 
     pre_id = []

@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage, fcluster
-from tqdm import tqdm
 
 
 
