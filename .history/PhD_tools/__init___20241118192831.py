@@ -8,4 +8,4 @@ from .TMD_plotting import *
 from .latices import *
 from .steiner import *
 from .Pre_processing import *
-from .synapses import *
+from .synapses 

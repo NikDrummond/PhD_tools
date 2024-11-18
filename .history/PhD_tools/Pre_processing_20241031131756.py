@@ -3,7 +3,6 @@ import Neurosetta as nr
 import numpy as np
 import fastcluster as fc
 from scipy.cluster.hierarchy import fcluster
-from scipy.stats import false_discovery_control as fdr
 
 
 
@@ -57,7 +56,7 @@ def vertex_hierarchical_clusters(N: nr.Tree_graph | gt.Graph,subset: np.ndarray 
     c_ids = fcluster(Z,k, criterion = 'maxclust')
     return Z, c_ids        
 
-def linkage_cluster_permutation(clusters:np.ndarray,Z:np.ndarray,inplace = True,root_cluster:int | None = None,perms:int = 1000,a:float = 0.05, multicomp: str | None = 'Bonferroni'):
+def linkage_cluster_permutation(clusters:np.ndarray,Z:np.ndarray,inplace = True,root_cluster:int | None = None,perms:int = 1000,a:float | str = 'Bonferroni'):
     """_summary_
 
     Parameters
@@ -97,15 +96,9 @@ def linkage_cluster_permutation(clusters:np.ndarray,Z:np.ndarray,inplace = True,
         # calculate exact p    
         ps = np.array([len(perm_sample[ perm_sample >= t]) / len(perm_sample) for t in link_dist])  
 
-        if multicomp == 'bonf':
-            ps *= len(ps)
-        elif (multicomp == 'bh') | (multicomp == 'by'):
-            ps = fdr(ps, method = multicomp)
-        elif multicomp is None:
-            pass
-        else:
-            raise AttributeError('Multicomparison correction must be None, Bonf, bh, or by')
-        
+        if isinstance(a,str):
+            if a == 'Bonferroni':
+                a = 0.05 /   
         if inplace:
             clusters[cluster[np.where(ps <= a)]] = -1
         else:

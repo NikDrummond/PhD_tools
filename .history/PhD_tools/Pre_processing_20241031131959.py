@@ -3,7 +3,6 @@ import Neurosetta as nr
 import numpy as np
 import fastcluster as fc
 from scipy.cluster.hierarchy import fcluster
-from scipy.stats import false_discovery_control as fdr
 
 
 
@@ -97,14 +96,8 @@ def linkage_cluster_permutation(clusters:np.ndarray,Z:np.ndarray,inplace = True,
         # calculate exact p    
         ps = np.array([len(perm_sample[ perm_sample >= t]) / len(perm_sample) for t in link_dist])  
 
-        if multicomp == 'bonf':
-            ps *= len(ps)
-        elif (multicomp == 'bh') | (multicomp == 'by'):
-            ps = fdr(ps, method = multicomp)
-        elif multicomp is None:
-            pass
-        else:
-            raise AttributeError('Multicomparison correction must be None, Bonf, bh, or by')
+        if multicomp == 'Bonferroni':
+            a = 0.05 / len(cluster_id)  
         
         if inplace:
             clusters[cluster[np.where(ps <= a)]] = -1

@@ -3,7 +3,7 @@ import Neurosetta as nr
 import numpy as np
 import fastcluster as fc
 from scipy.cluster.hierarchy import fcluster
-from scipy.stats import false_discovery_control as fdr
+
 
 
 

@@ -50,8 +50,8 @@ def vertex_hierarchical_clusters(N: nr.Tree_graph | gt.Graph,subset: np.ndarray 
     if subset is None:
         subset = g.get_vertices()    
     # generate pairwise distance matrix based on path length
-    mat = nr.dist_mat(g, subset, method = distance, flatten=True)
-    # generate linkage matrix
+    mat = 
+    # generate linkage matrixnr.dist_mat(g, subset, method = distance, flatten=True)
     Z = fc.linkage(mat, method = method)
     # cluster inds
     c_ids = fcluster(Z,k, criterion = 'maxclust')
