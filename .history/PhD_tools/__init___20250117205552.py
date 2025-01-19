@@ -10,5 +10,4 @@ from .steiner import *
 from .Pre_processing import *
 from .synapses import *
 from .ALPS import *
-from .plotting import *
-from .volume_plots import *
+from .plotting import 
