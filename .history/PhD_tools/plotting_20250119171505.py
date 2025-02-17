@@ -37,30 +37,29 @@ def A4_figure(
     fig = plt.figure(figsize=(A4_width_in, A4_height_in))
     fig.subplots_adjust(
         left=margin_left / A4_width_cm,
-        right= 1 - margin_right / A4_width_cm,
+        right=margin_right / A4_width_cm,
         bottom=margin_top / A4_height_cm,
-        top= 1 - margin_bottom / A4_height_cm
+        top=margin_bottom / A4_height_cm
     )
     return fig
 
 
-def fig_add_axes(fig, x, y, height, width, polar = False):
+def fig_add_axes(fig, x, y, height, width):
 
-    # # make sure we are in bounds
-    # assert x >= 0, "x position must be >= 0"
-    # assert y >= 0, "y position must be >= 0"
-    # assert y + height <= fig_height, "Top of ax out of bounds"
-    # assert x + width <= fig_width, "Right of ax out of bounds"
+    # make sure we are in bounds
+    assert x >= 0, "x position must be >= 0"
+    assert y >= 0, "y position must be >= 0"
+    assert y + height <= fig_height, "Top of ax out of bounds"
+    assert x + width <= fig_width, "Right of ax out of bounds"
 
     # Convert scatter plot dimensions to relative figure coordinates
-    scatter_x_rel = x / A4_width_cm
-    scatter_y_rel = y / A4_height_cm
-    scatter_width_rel = width / A4_width_cm
-    scatter_height_rel = height / A4_height_cm
+    scatter_x_rel = x / fig_width
+    scatter_y_rel = y / fig_height
+    scatter_width_rel = width / fig_width
+    scatter_height_rel = height / fig_height
 
     ax = fig.add_axes(
-        [scatter_x_rel, scatter_y_rel, scatter_width_rel, scatter_height_rel],
-        projection='polar' if polar else None
+        [scatter_x_rel, scatter_y_rel, scatter_width_rel, scatter_height_rel]
     )
 
     return ax

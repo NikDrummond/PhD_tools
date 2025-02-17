@@ -44,7 +44,7 @@ def A4_figure(
     return fig
 
 
-def fig_add_axes(fig, x, y, height, width, polar = False):
+def fig_add_axes(fig, x, y, height, width, **kwargs):
 
     # # make sure we are in bounds
     # assert x >= 0, "x position must be >= 0"
@@ -59,8 +59,7 @@ def fig_add_axes(fig, x, y, height, width, polar = False):
     scatter_height_rel = height / A4_height_cm
 
     ax = fig.add_axes(
-        [scatter_x_rel, scatter_y_rel, scatter_width_rel, scatter_height_rel],
-        projection='polar' if polar else None
+        [scatter_x_rel, scatter_y_rel, scatter_width_rel, scatter_height_rel]
     )
 
     return ax
