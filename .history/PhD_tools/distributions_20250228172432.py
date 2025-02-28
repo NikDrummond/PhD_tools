@@ -1,64 +1,43 @@
 import numpy as np
 
-def edf(data, alpha=0.05, x0=None, x1=None, bins=None):
+def edf(data, alpha=.05, x0=None, x1=None , bins = 100):
     """
-    Calculate the empirical distribution function and confidence intervals.
+    Calculate the empirical distribution function and confidence intervals around it.
 
     Parameters
     ----------
-    data : np.ndarray
-        1D array of sample data.
-    alpha : float, optional
-        Confidence level for the interval (default is 0.05).
-    x0 : float, optional
-        Lower bound of the x-range (default is min(data) with buffer).
-    x1 : float, optional
-        Upper bound of the x-range (default is max(data) with buffer).
-    bins : int, optional
-        Number of evaluation points (adaptive if None).
+    data:
+
+    alpha:
+
+    x0:
+
+    x1:
 
     Returns
     -------
-    x : np.ndarray
-        Evaluation points.
-    y : np.ndarray
-        EDF values.
-    l : np.ndarray
-        Lower bound of confidence interval.
-    u : np.ndarray
-        Upper bound of confidence interval.
+    x:
+
+    y:
+
+    l:
+
+    u:
     """
 
-    # Input validation
-    assert isinstance(data, np.ndarray), "data must be a NumPy array"
-    assert data.ndim == 1, "data must be a 1D array"
-    assert 0 < alpha < 1, "alpha must be in (0,1)"
-    
-    data = np.sort(data)  # Sort data for faster search
-    N = len(data)
-    
-    # Define x range with optional buffer
-    x0 = np.min(data) if x0 is None else x0
-    x1 = np.max(data) if x1 is None else x1
-    buffer = 0.05 * (x1 - x0)  # Small buffer around observed range
-    x0, x1 = x0 - buffer, x1 + buffer
 
-    # Adaptive bin selection using Freedman-Diaconis rule
-    if bins is None:
-        iqr = np.percentile(data, 75) - np.percentile(data, 25)
-        bin_width = 2 * iqr / np.cbrt(N)  # Freedman-Diaconis rule
-        bins = max(10, int((x1 - x0) / bin_width))  # Ensure reasonable number
-
+    x0 = data.min() if x0 is None else x0
+    x1 = data.max() if x1 is None else x1
     x = np.linspace(x0, x1, bins)
-    
-    # Compute EDF efficiently
-    y = np.searchsorted(data, x, side='right') / N
-    
-    # Confidence interval calculation
-    e = np.sqrt(np.log(2.0 / alpha) / (2 * N))
-    l = np.maximum(y - e, 0)
-    u = np.minimum(y + e, 1)
-    
+    N = data.size
+    y = np.zeros_like(x)
+    l = np.zeros_like(x)
+    u = np.zeros_like(x)
+    e = np.sqrt(1.0/(2*N) * np.log(2./alpha))
+    for i, xx in enumerate(x):
+        y[i] = np.sum(data <= xx)/N
+        l[i] = np.maximum( y[i] - e, 0 )
+        u[i] = np.minimum( y[i] + e, 1 )
     return x, y, l, u
 
 def epdf(data, alpha=0.05, x0=None, x1=None, bins=None, n_bootstrap=1000):
@@ -124,7 +103,6 @@ def epdf(data, alpha=0.05, x0=None, x1=None, bins=None, n_bootstrap=1000):
     upper_bound = np.percentile(boot_samples, 100 * (1 - alpha / 2), axis=0)
 
     return bin_centers, hist_values, lower_bound, upper_bound
-
 # PERT and distance functions
 
 #### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
