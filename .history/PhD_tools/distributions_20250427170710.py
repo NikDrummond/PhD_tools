@@ -125,6 +125,235 @@ def epdf(data, alpha=0.05, x0=None, x1=None, bins=None, n_bootstrap=1000):
 
     return bin_centers, hist_values, lower_bound, upper_bound
 
+def asymmetric_mad(data):
+    """
+    Computes asymmetric MAD for each list in a dictionary or each column of a 2D array.
+
+    Parameters:
+        data (dict or np.ndarray):
+            - dict: keys are labels, values are 1D lists/arrays (may have different lengths)
+            - ndarray: shape (n_samples, n_features)
+
+    Returns:
+        If dict: dict with keys 'median', 'mad_low', 'mad_high' -> subdicts by original keys
+        If array: tuple of (median, mad_low, mad_high) as ndarrays
+    """
+    if isinstance(data, dict):
+        result = {"median": {}, "mad_low": {}, "mad_high": {}}
+        for key, values in data.items():
+            arr = np.asarray(values)
+            median = np.nanmedian(arr)
+            diffs = np.abs(arr - median)
+            below = arr < median
+            above = arr > median
+
+            mad_low = np.nanmedian(diffs[below]) if np.any(below) else np.nan
+            mad_high = np.nanmedian(diffs[above]) if np.any(above) else np.nan
+
+            result["median"][key] = median
+            result["mad_low"][key] = mad_low
+            result["mad_high"][key] = mad_high
+        return result
+
+    # Original behavior for 2D array
+    median = np.nanmedian(data, axis=0)
+    below = data < median
+    above = data > median
+
+    mad_low = np.full(data.shape[1], np.nan)
+    mad_high = np.full(data.shape[1], np.nan)
+
+    for i in range(data.shape[1]):
+        diffs = np.abs(data[:, i] - median[i])
+        if np.any(below[:, i]):
+            mad_low[i] = np.nanmedian(diffs[below[:, i]])
+        if np.any(above[:, i]):
+            mad_high[i] = np.nanmedian(diffs[above[:, i]])
+
+    return median, mad_low, mad_high
+
+
+def bootstrap_ci_mean(data, n_boot=1000, ci=95):
+    """
+    Bootstrap confidence intervals for mean of each list in a dictionary or column of a 2D array.
+
+    Parameters:
+        data : dict or ndarray
+            - dict: keys map to lists of numbers (different lengths allowed)
+            - ndarray: shape (n_samples, n_features)
+        n_boot : int
+            Number of bootstrap samples.
+        ci : float
+            Confidence interval width (e.g. 95 for 95% CI).
+
+    Returns:
+        If dict: dict with keys 'mean', 'lower', 'upper' -> subdicts by original keys
+        If array: tuple of (mean, lower_error, upper_error)
+    """
+    if isinstance(data, dict):
+        result = {"mean": {}, "lower": {}, "upper": {}}
+        lower_percentile = (100 - ci) / 2
+        upper_percentile = 100 - lower_percentile
+
+        for key, values in data.items():
+            arr = np.asarray(values)
+            boot_means = np.zeros(n_boot)
+            n = len(arr)
+
+            for i in range(n_boot):
+                sample = arr[np.random.randint(0, n, size=n)]
+                boot_means[i] = np.nanmean(sample)
+
+            mean = np.nanmean(arr)
+            lower = np.percentile(boot_means, lower_percentile)
+            upper = np.percentile(boot_means, upper_percentile)
+
+            result["mean"][key] = mean
+            result["lower"][key] = mean - lower
+            result["upper"][key] = upper - mean
+        return result
+
+    # Original behavior for 2D array
+    n, m = data.shape
+    means = np.zeros((n_boot, m))
+
+    for i in range(n_boot):
+        sample = data[np.random.randint(0, n, size=n), :]
+        means[i] = np.nanmean(sample, axis=0)
+
+    lower_percentile = (100 - ci) / 2
+    upper_percentile = 100 - lower_percentile
+
+    mean = np.nanmean(data, axis=0)
+    lower = np.percentile(means, lower_percentile, axis=0)
+    upper = np.percentile(means, upper_percentile, axis=0)
+
+    return mean, mean - lower, upper - mean
+
+
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+from itertools import combinations
+
+
+def kruskal_ANOVA(
+    df, group_col, value_col, rank_col=None, rank_value=None):
+    """
+    Perform Kruskal-Wallis test and calculate Epsilon-squared effect size.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input data containing values and group labels.
+    group_col : str
+        Column name for group labels.
+    value_col : str
+        Column name for the measured values.
+    rank_col : str, optional
+        Column name for eigenvalue rank if filtering is needed, by default None.
+    rank_value : int, optional
+        Value of eigenvalue rank to filter on, by default None.
+
+    Returns
+    -------
+    tuple
+        Kruskal-Wallis H-statistic (float), Epsilon-squared effect size (float), and p-value (float).
+
+    Raises
+    ------
+    ValueError
+        If the input DataFrame does not contain specified columns.
+    """
+
+    # 1. Optional filter by eigenvalue rank
+    if rank_col and rank_value is not None:
+        df = df[df[rank_col] == rank_value]
+
+    # 2. Prepare groups
+    group_names = df[group_col].unique()
+    groups = [df[df[group_col] == g][value_col] for g in group_names]
+
+    # 3. Kruskal-Wallis Test
+    h_stat, p_kruskal = stats.kruskal(*groups)
+
+    # 4. calculate effect size
+    k = len(group_names)
+    n = len(df)
+    ef = (h_stat - k + 1) / (n - k)
+
+    return h_stat, ef, p_kruskal
+
+def Mann_Whitney_pairwise(df, value_col, group_col, rank_col=None, rank_value=None, correction = 'bonferroni'):
+    """
+    Perform pairwise Mann-Whitney U-tests with multiple testing correction.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input data containing values and group labels.
+    value_col : str
+        Column name for the measured values.
+    group_col : str
+        Column name for group labels.
+    rank_col : str, optional
+        Column name for eigenvalue rank if filtering is needed, by default None.
+    rank_value : int, optional
+        Value of eigenvalue rank to filter on, by default None.
+    correction : str, optional
+        Method for multiple comparisons correction, 'bonferroni' or 'holm', by default 'bonferroni'.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame containing group pairs, U-statistic, raw p-values, and corrected p-values.
+
+    Raises
+    ------
+    ValueError
+        If the correction method specified is not 'bonferroni' or 'holm'.
+    """
+    # 1. Optional filter by eigenvalue rank
+    if rank_col and rank_value is not None:
+        df = df[df[rank_col] == rank_value]
+
+    # 2. Prepare groups
+    group_names = df[group_col].unique()
+
+    # Pairwise Mann-Whitney tests
+    pairwise_results = []
+
+    for g1, g2 in combinations(group_names, 2):
+        data1 = df[df[group_col] == g1][value_col]
+        data2 = df[df[group_col] == g2][value_col]
+        u_stat, p_val = stats.mannwhitneyu(data1, data2, alternative="two-sided")
+        pairwise_results.append((g1, g2, u_stat, p_val))
+
+    results_df = pd.DataFrame(
+        pairwise_results, columns=["Group1", "Group2", "U_statistic", "p_value"]
+    )
+
+    # 5. Multiple comparisons correction
+    if correction == "bonferroni":
+        m = len(results_df)
+        results_df["p_value_corrected"] = np.minimum(results_df["p_value"] * m, 1.0)
+    elif correction == "holm":
+        # Holm-Bonferroni
+        results_df = results_df.sort_values("p_value")
+        m = len(results_df)
+        holm_p = []
+        for i, p in enumerate(results_df["p_value"]):
+            corrected = min(p * (m - i), 1.0)
+            holm_p.append(corrected)
+        results_df["p_value_corrected"] = holm_p
+        results_df = results_df.sort_index()  # return to original order
+    else:
+        raise ValueError("Correction method must be 'bonferroni' or 'holm'.")
+
+    return results_df
+
+
+
 # PERT and distance functions
 
 #### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1

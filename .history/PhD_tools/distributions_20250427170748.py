@@ -1,15 +1,5 @@
 import numpy as np
 
-import pandas as pd
-import jax.numpy as jnp
-from jax import random, vmap, jit
-from itertools import combinations
-import scipy.stats as stats
-from itertools import combinations
-from jax.ops import segment_sum
-from scipy.stats import rankdata
-
-
 def edf(data, alpha=0.05, x0=None, x1=None, bins=None):
     """
     Calculate the empirical distribution function and confidence intervals.
@@ -241,6 +231,10 @@ def bootstrap_ci_mean(data, n_boot=1000, ci=95):
     return mean, mean - lower, upper - mean
 
 
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+from itertools import combinations
 
 
 def kruskal_ANOVA(
@@ -358,6 +352,13 @@ def Mann_Whitney_pairwise(df, value_col, group_col, rank_col=None, rank_value=No
 
     return results_df
 
+import pandas as pd
+import numpy as np
+import jax.numpy as jnp
+from jax import random, vmap, jit
+from jax.ops import segment_sum
+from scipy.stats import rankdata
+from itertools import combinations
 
 @jit
 def compute_anova_f_stat(y, groups, unique_groups):
@@ -457,7 +458,11 @@ def permutation_anova(df, group_col, value_col, num_permutations=1000, seed=42, 
         'rank_based': rank_based
     }
 
-
+import pandas as pd
+import numpy as np
+import jax.numpy as jnp
+from jax import random, vmap, jit
+from itertools import combinations
 
 @jit
 def compute_difference_mean_and_d(group1_vals, group2_vals):
@@ -590,161 +595,161 @@ def permutation_posthoc_pairwise(df, group_col, value_col, num_permutations=5000
     return results_df
 
 
-# PERT and distance functions - commenting this out for now
+# PERT and distance functions
 
-# #### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
+#### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
 
-# class PERT:
-#     """PERT probability distribution.
+class PERT:
+    """PERT probability distribution.
 
-#     Implements the PERT (Program Evaluation and Review Technique) probability distribution. 
-#     Allows specifying the min, mode, and max values to define the distribution.
+    Implements the PERT (Program Evaluation and Review Technique) probability distribution. 
+    Allows specifying the min, mode, and max values to define the distribution.
 
-#     Attributes:
-#         a: Minimum value
-#         b: Mode value 
-#         c: Maximum value
-#         lamb: Shape parameter
-#         alpha: PERT distribution alpha parameter
-#         beta: PERT distribution beta parameter 
-#         mean: Mean of distribution
-#         var: Variance of distribution
+    Attributes:
+        a: Minimum value
+        b: Mode value 
+        c: Maximum value
+        lamb: Shape parameter
+        alpha: PERT distribution alpha parameter
+        beta: PERT distribution beta parameter 
+        mean: Mean of distribution
+        var: Variance of distribution
 
-#     Methods:
-#         build: Calculates PERT distribution parameters
-#         median: Returns median of distribution
-#         pdf: Evaluates the probability density function    
-#     """
-#     def __init__(self, min_val:float, mode:float, max_val:float, lamb:float = 4.0):
-#         self.a = min_val
-#         self.b = mode
-#         self.c = max_val
-#         self.lamb = lamb
+    Methods:
+        build: Calculates PERT distribution parameters
+        median: Returns median of distribution
+        pdf: Evaluates the probability density function    
+    """
+    def __init__(self, min_val:float, mode:float, max_val:float, lamb:float = 4.0):
+        self.a = min_val
+        self.b = mode
+        self.c = max_val
+        self.lamb = lamb
 
-#         # some checks
-#         assert lamb > 0, 'lamb parameter should be greater than 0.'
-#         assert self.b > self.a, 'minimum value must be lower than mode.'
-#         assert self.c > self.b, 'maximum values must be greater than mode.'
-#         assert not isclose(self.a,self.b) | isclose(self.b,self.c) | isclose(self.a,self.c), 'minimum, mode, and maximum values should be different.'
+        # some checks
+        assert lamb > 0, 'lamb parameter should be greater than 0.'
+        assert self.b > self.a, 'minimum value must be lower than mode.'
+        assert self.c > self.b, 'maximum values must be greater than mode.'
+        assert not isclose(self.a,self.b) | isclose(self.b,self.c) | isclose(self.a,self.c), 'minimum, mode, and maximum values should be different.'
 
-#         self.build()
+        self.build()
         
-#     def build(self):
+    def build(self):
 
                 
-#         self.alpha = 1 + (self.lamb * ((self.b-self.a) / (self.c-self.a)))
-#         self.beta = 1 + (self.lamb * ((self.c-self.b) / (self.c-self.a)))
+        self.alpha = 1 + (self.lamb * ((self.b-self.a) / (self.c-self.a)))
+        self.beta = 1 + (self.lamb * ((self.c-self.b) / (self.c-self.a)))
         
-#         self.mean = (self.a + (self.lamb*self.b) + self.c) / (2+self.lamb)
-#         self.var = ((self.mean-self.a) * (self.c-self.mean)) / (self.lamb+3)
+        self.mean = (self.a + (self.lamb*self.b) + self.c) / (2+self.lamb)
+        self.var = ((self.mean-self.a) * (self.c-self.mean)) / (self.lamb+3)
         
-#     @property
-#     def range(self):
-#         """ Calculates the min-max range
+    @property
+    def range(self):
+        """ Calculates the min-max range
         
-#         Returns
-#         -------
-#         Array:
-#             Array of range values of max-min.
-#         """
-#         return np.asarray(self.c - self.a)
+        Returns
+        -------
+        Array:
+            Array of range values of max-min.
+        """
+        return np.asarray(self.c - self.a)
     
-#     def median(self) -> float:
-#         median = (beta_dist(self.alpha, self.beta).median() * self.range) + self.a
-#         return median
+    def median(self) -> float:
+        median = (beta_dist(self.alpha, self.beta).median() * self.range) + self.a
+        return median
     
-#     def std(self) -> float:
-#         return np.sqrt(self.var)
+    def std(self) -> float:
+        return np.sqrt(self.var)
     
-#     def pdf(self, val:np.ndarray) -> np.ndarray:
-#         x = ((val - self.a) / self.range).clip(0,1)
-#         pdf_val = beta_dist.pdf(x, self.alpha, self.beta) / self.range
-#         return pdf_val
+    def pdf(self, val:np.ndarray) -> np.ndarray:
+        x = ((val - self.a) / self.range).clip(0,1)
+        pdf_val = beta_dist.pdf(x, self.alpha, self.beta) / self.range
+        return pdf_val
 
 
-# def mahalanobis_distance(x:float, expectancy:float, cov:float, absolute:bool = False) -> float:
-#     """Calculates the Mahalanobis distance between a vector x and a distribution
-#     with mean expectancy and covariance matrix cov. 
+def mahalanobis_distance(x:float, expectancy:float, cov:float, absolute:bool = False) -> float:
+    """Calculates the Mahalanobis distance between a vector x and a distribution
+    with mean expectancy and covariance matrix cov. 
 
-#     NOTE THIS IS WRONG - NEED TO FIX BUT NOT CURRENTLY USING IT.
+    NOTE THIS IS WRONG - NEED TO FIX BUT NOT CURRENTLY USING IT.
 
-#     Parameters:
-#         x (np.ndarray): Vector to calculate distance for
-#         expectancy (np.ndarray): Mean of distribution
-#         cov (np.ndarray): Covariance matrix of distribution
-#         abs (bool): Whether to take absolute value of distance
+    Parameters:
+        x (np.ndarray): Vector to calculate distance for
+        expectancy (np.ndarray): Mean of distribution
+        cov (np.ndarray): Covariance matrix of distribution
+        abs (bool): Whether to take absolute value of distance
 
-#     Returns:
-#         dist (np.ndarray): Mahalanobis distance 
-#     """
-#     dist = (x - expectancy) / cov
-#     if absolute:
-#         dist = abs(dist)
-#     return dist 
+    Returns:
+        dist (np.ndarray): Mahalanobis distance 
+    """
+    dist = (x - expectancy) / cov
+    if absolute:
+        dist = abs(dist)
+    return dist 
 
-# ## Generalised Histogram thresholding
+## Generalised Histogram thresholding
 
 
-# # If this code is shared with paper publication, add that this essentially copied from GHT paper
+# If this code is shared with paper publication, add that this essentially copied from GHT paper
 
-# # cumulative sum
-# csum = lambda z:np.cumsum(z)[:-1]
-# #de-cumulative sum
-# dsum = lambda z:np.cumsum(z[::-1])[-2::-1]
+# cumulative sum
+csum = lambda z:np.cumsum(z)[:-1]
+#de-cumulative sum
+dsum = lambda z:np.cumsum(z[::-1])[-2::-1]
 
-# # Use the mean for ties .
-# argmax = lambda x , f:np.mean(x[:-1][f==np.max(f)]) 
-# clip = lambda z:np.maximum(1e-30,z)
+# Use the mean for ties .
+argmax = lambda x , f:np.mean(x[:-1][f==np.max(f)]) 
+clip = lambda z:np.maximum(1e-30,z)
 
-# def image_hist(N, range = None):
-#     """ Generate bins and counts """
-#     image = N.ravel().astype(int)
-#     n = np.bincount(image,minlength = np.max(image) - np.min(image) + 1)
-#     if range != None:
-#         if len(range) != 2:
-#             raise TypeError('Range is not length 2')
-#         else:
-#             x = np.arange(range[0], range[1])    
-#     elif range == None:
-#         x = np.arange(0,np.max(image) + 1)
-#     else:
-#         raise TypeError("range input type not supported")
+def image_hist(N, range = None):
+    """ Generate bins and counts """
+    image = N.ravel().astype(int)
+    n = np.bincount(image,minlength = np.max(image) - np.min(image) + 1)
+    if range != None:
+        if len(range) != 2:
+            raise TypeError('Range is not length 2')
+        else:
+            x = np.arange(range[0], range[1])    
+    elif range == None:
+        x = np.arange(0,np.max(image) + 1)
+    else:
+        raise TypeError("range input type not supported")
     
-#     return n,x
+    return n,x
 
-# def preliminaries(n, x):
-#     """ Some math that is shared across each algorithm - refering to GHT, weighted percentile and Otsu"""
-#     assert np . all(n >= 0)
-#     x = np.arange(len(n), dtype=n.dtype) if x is None else x
-#     assert np . all(x[1:] >= x[: -1])
-#     w0 = clip(csum(n))
-#     w1 = clip(dsum(n))
-#     p0 = w0/(w0 + w1)
-#     p1 = w1/(w0 + w1)
-#     mu0 = csum(n*x)/w0
-#     mu1 = dsum(n*x)/w1
-#     d0 = csum(n*x**2)-w0*mu0**2
-#     d1 = dsum(n*x**2)-w1*mu1**2
-#     return x, w0, w1, p0, p1, mu0, mu1, d0, d1
+def preliminaries(n, x):
+    """ Some math that is shared across each algorithm - refering to GHT, weighted percentile and Otsu"""
+    assert np . all(n >= 0)
+    x = np.arange(len(n), dtype=n.dtype) if x is None else x
+    assert np . all(x[1:] >= x[: -1])
+    w0 = clip(csum(n))
+    w1 = clip(dsum(n))
+    p0 = w0/(w0 + w1)
+    p1 = w1/(w0 + w1)
+    mu0 = csum(n*x)/w0
+    mu1 = dsum(n*x)/w1
+    d0 = csum(n*x**2)-w0*mu0**2
+    d1 = dsum(n*x**2)-w1*mu1**2
+    return x, w0, w1, p0, p1, mu0, mu1, d0, d1
 
 
-# def GHT(n, x, nu=None, tau=0.1, kappa=0.1, omega=0.5):
-#     """ GHT implementation"""
-#     if nu == None:
-#         nu = abs(len(x)/2)
-#     assert nu >= 0
-#     assert tau >= 0
-#     assert kappa >= 0
-#     assert omega >= 0 and omega <= 1
-#     x, w0, w1, p0, p1, _, _, d0, d1 = preliminaries(n, x)
-#     v0 = clip((p0*nu*tau**2+d0)/(p0*nu+w0))
-#     v1 = clip((p1*nu*tau**2+d1)/(p1*nu+w1))
-#     f0 = - d0/v0-w0*np.log(v0) + 2*(w0+kappa*omega)*np.log(w0)
-#     f1 = - d1/v1-w1*np.log(v1)+2*\
-#         (w1+kappa*(1-omega))*np.log(w1)
-#     return argmax(x, f0+f1), f0+f1
+def GHT(n, x, nu=None, tau=0.1, kappa=0.1, omega=0.5):
+    """ GHT implementation"""
+    if nu == None:
+        nu = abs(len(x)/2)
+    assert nu >= 0
+    assert tau >= 0
+    assert kappa >= 0
+    assert omega >= 0 and omega <= 1
+    x, w0, w1, p0, p1, _, _, d0, d1 = preliminaries(n, x)
+    v0 = clip((p0*nu*tau**2+d0)/(p0*nu+w0))
+    v1 = clip((p1*nu*tau**2+d1)/(p1*nu+w1))
+    f0 = - d0/v0-w0*np.log(v0) + 2*(w0+kappa*omega)*np.log(w0)
+    f1 = - d1/v1-w1*np.log(v1)+2*\
+        (w1+kappa*(1-omega))*np.log(w1)
+    return argmax(x, f0+f1), f0+f1
 
-# ###
+###
 
 
 

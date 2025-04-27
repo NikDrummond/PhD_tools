@@ -1,14 +1,25 @@
 import numpy as np
 
 import pandas as pd
+import numpy as np
 import jax.numpy as jnp
 from jax import random, vmap, jit
 from itertools import combinations
+
+
+import numpy as np
+import pandas as pd
 import scipy.stats as stats
 from itertools import combinations
+
+
+import pandas as pd
+import numpy as np
+import jax.numpy as jnp
+from jax import random, vmap, jit
 from jax.ops import segment_sum
 from scipy.stats import rankdata
-
+from itertools import combinations
 
 def edf(data, alpha=0.05, x0=None, x1=None, bins=None):
     """

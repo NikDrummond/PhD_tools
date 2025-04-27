@@ -1,15 +1,5 @@
 import numpy as np
 
-import pandas as pd
-import jax.numpy as jnp
-from jax import random, vmap, jit
-from itertools import combinations
-import scipy.stats as stats
-from itertools import combinations
-from jax.ops import segment_sum
-from scipy.stats import rankdata
-
-
 def edf(data, alpha=0.05, x0=None, x1=None, bins=None):
     """
     Calculate the empirical distribution function and confidence intervals.
@@ -241,6 +231,10 @@ def bootstrap_ci_mean(data, n_boot=1000, ci=95):
     return mean, mean - lower, upper - mean
 
 
+import numpy as np
+import pandas as pd
+import scipy.stats as stats
+from itertools import combinations
 
 
 def kruskal_ANOVA(
@@ -358,6 +352,13 @@ def Mann_Whitney_pairwise(df, value_col, group_col, rank_col=None, rank_value=No
 
     return results_df
 
+import pandas as pd
+import numpy as np
+import jax.numpy as jnp
+from jax import random, vmap, jit
+from jax.ops import segment_sum
+from scipy.stats import rankdata
+from itertools import combinations
 
 @jit
 def compute_anova_f_stat(y, groups, unique_groups):
@@ -459,292 +460,161 @@ def permutation_anova(df, group_col, value_col, num_permutations=1000, seed=42, 
 
 
 
-@jit
-def compute_difference_mean_and_d(group1_vals, group2_vals):
-    """Compute absolute difference of means and Cohen's d."""
-    diff = jnp.abs(jnp.mean(group1_vals) - jnp.mean(group2_vals))
-    pooled_sd = jnp.sqrt((jnp.var(group1_vals, ddof=1) + jnp.var(group2_vals, ddof=1)) / 2)
-    d = diff / pooled_sd
-    return diff, d
+# PERT and distance functions
 
-@jit
-def compute_mwu_and_r(group1_vals, group2_vals):
-    """Compute Mann-Whitney U and rank-biserial correlation."""
-    n1 = group1_vals.shape[0]
-    n2 = group2_vals.shape[0]
-    u = jnp.sum(jnp.expand_dims(group1_vals, 0) > group2_vals[:, None]) + 0.5 * jnp.sum(jnp.expand_dims(group1_vals, 0) == group2_vals[:, None])
-    u = jnp.minimum(u, n1 * n2 - u)  # smaller U
-    r = 1 - (2 * u) / (n1 * n2)
-    return u, r
+#### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
 
-@jit
-def compute_cliff_delta(group1_vals, group2_vals):
-    """Compute Cliff's delta."""
-    n1 = group1_vals.shape[0]
-    n2 = group2_vals.shape[0]
-    greater = jnp.sum(jnp.expand_dims(group1_vals, 0) > group2_vals[:, None])
-    less = jnp.sum(jnp.expand_dims(group1_vals, 0) < group2_vals[:, None])
-    delta = (greater - less) / (n1 * n2)
-    return delta, delta  # same value returned as "statistic" and "effect size"
+class PERT:
+    """PERT probability distribution.
 
-def permutation_posthoc_pairwise(df, group_col, value_col, num_permutations=5000, seed=42, correction='bonferroni', test='mean'):
+    Implements the PERT (Program Evaluation and Review Technique) probability distribution. 
+    Allows specifying the min, mode, and max values to define the distribution.
+
+    Attributes:
+        a: Minimum value
+        b: Mode value 
+        c: Maximum value
+        lamb: Shape parameter
+        alpha: PERT distribution alpha parameter
+        beta: PERT distribution beta parameter 
+        mean: Mean of distribution
+        var: Variance of distribution
+
+    Methods:
+        build: Calculates PERT distribution parameters
+        median: Returns median of distribution
+        pdf: Evaluates the probability density function    
     """
-    Perform permutation-based post-hoc pairwise comparisons between groups.
+    def __init__(self, min_val:float, mode:float, max_val:float, lamb:float = 4.0):
+        self.a = min_val
+        self.b = mode
+        self.c = max_val
+        self.lamb = lamb
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input data.
-    group_col : str
-        Column name for group labels.
-    value_col : str
-        Column name for measured values.
-    num_permutations : int, optional
-        Number of permutations, by default 5000.
-    seed : int, optional
-        Random seed, by default 42.
-    correction : str, optional
-        'bonferroni' or 'holm', by default 'bonferroni'.
-    test : str, optional
-        'mean', 'mwu', or 'cliff', by default 'mean'.
+        # some checks
+        assert lamb > 0, 'lamb parameter should be greater than 0.'
+        assert self.b > self.a, 'minimum value must be lower than mode.'
+        assert self.c > self.b, 'maximum values must be greater than mode.'
+        assert not isclose(self.a,self.b) | isclose(self.b,self.c) | isclose(self.a,self.c), 'minimum, mode, and maximum values should be different.'
 
-    Returns
-    -------
-    pd.DataFrame
-        DataFrame with Group1, Group2, ObservedStatistic, EffectSize, p_value, and p_value_corrected.
-    """
-
-    group_labels, uniques = pd.factorize(df[group_col])
-    groups = jnp.array(group_labels)
-    uniques = np.array(uniques)
-    values = jnp.array(df[value_col].values)
-
-    group_ids = jnp.unique(groups)
-    results = []
-    key = random.PRNGKey(seed)
-
-    for idx, (g1, g2) in enumerate(combinations(group_ids, 2)):
-        mask = (groups == g1) | (groups == g2)
-        y_pair = values[mask]
-        groups_pair = groups[mask]
-
-        group1_vals = y_pair[groups_pair == g1]
-        group2_vals = y_pair[groups_pair == g2]
-
-        # Choose which comparison to run
-        if test == 'mean':
-            observed_stat, effect_size = compute_difference_mean_and_d(group1_vals, group2_vals)
-        elif test == 'mwu':
-            observed_stat, effect_size = compute_mwu_and_r(group1_vals, group2_vals)
-        elif test == 'cliff':
-            observed_stat, effect_size = compute_cliff_delta(group1_vals, group2_vals)
-        else:
-            raise ValueError("Test must be 'mean', 'mwu', or 'cliff'.")
-
-        n_total = y_pair.shape[0]
-        n1 = group1_vals.shape[0]
-        n2 = group2_vals.shape[0]
-        subkey = random.fold_in(key, idx)
-        keys = random.split(subkey, num_permutations)
-
-        @jit
-        def permute_once(k):
-            permuted_idx = random.permutation(k, n_total)
-            permuted_y = y_pair[permuted_idx]
-
-            perm_group1 = permuted_y[:n1]
-            perm_group2 = permuted_y[n1:n1+n2]
-
-            if test == 'mean':
-                perm_stat, _ = compute_difference_mean_and_d(perm_group1, perm_group2)
-            elif test == 'mwu':
-                perm_stat, _ = compute_mwu_and_r(perm_group1, perm_group2)
-            elif test == 'cliff':
-                perm_stat, _ = compute_cliff_delta(perm_group1, perm_group2)
-            return perm_stat
-
-        permuted_stats = vmap(permute_once)(keys)
-
-        # Correct two-sided permutation
-        p_value = jnp.mean(jnp.abs(permuted_stats) >= jnp.abs(observed_stat))
-
-        results.append((uniques[g1], uniques[g2], float(observed_stat), float(effect_size), float(p_value)))
-
-    results_df = pd.DataFrame(results, columns=["Group1", "Group2", "ObservedStatistic", "EffectSize", "p_value"])
-
-    # Multiple comparisons correction
-    m = len(results_df)
-    if correction == 'bonferroni':
-        results_df["p_value_corrected"] = np.minimum(results_df["p_value"] * m, 1.0)
-    elif correction == 'holm':
-        results_df = results_df.sort_values("p_value")
-        holm_p = []
-        for i, p in enumerate(results_df["p_value"]):
-            corrected = min(p * (m - i), 1.0)
-            holm_p.append(corrected)
-        results_df["p_value_corrected"] = holm_p
-        results_df = results_df.sort_index()
-    else:
-        raise ValueError("Correction must be 'bonferroni' or 'holm'.")
-
-    return results_df
-
-
-# PERT and distance functions - commenting this out for now
-
-# #### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
-
-# class PERT:
-#     """PERT probability distribution.
-
-#     Implements the PERT (Program Evaluation and Review Technique) probability distribution. 
-#     Allows specifying the min, mode, and max values to define the distribution.
-
-#     Attributes:
-#         a: Minimum value
-#         b: Mode value 
-#         c: Maximum value
-#         lamb: Shape parameter
-#         alpha: PERT distribution alpha parameter
-#         beta: PERT distribution beta parameter 
-#         mean: Mean of distribution
-#         var: Variance of distribution
-
-#     Methods:
-#         build: Calculates PERT distribution parameters
-#         median: Returns median of distribution
-#         pdf: Evaluates the probability density function    
-#     """
-#     def __init__(self, min_val:float, mode:float, max_val:float, lamb:float = 4.0):
-#         self.a = min_val
-#         self.b = mode
-#         self.c = max_val
-#         self.lamb = lamb
-
-#         # some checks
-#         assert lamb > 0, 'lamb parameter should be greater than 0.'
-#         assert self.b > self.a, 'minimum value must be lower than mode.'
-#         assert self.c > self.b, 'maximum values must be greater than mode.'
-#         assert not isclose(self.a,self.b) | isclose(self.b,self.c) | isclose(self.a,self.c), 'minimum, mode, and maximum values should be different.'
-
-#         self.build()
+        self.build()
         
-#     def build(self):
+    def build(self):
 
                 
-#         self.alpha = 1 + (self.lamb * ((self.b-self.a) / (self.c-self.a)))
-#         self.beta = 1 + (self.lamb * ((self.c-self.b) / (self.c-self.a)))
+        self.alpha = 1 + (self.lamb * ((self.b-self.a) / (self.c-self.a)))
+        self.beta = 1 + (self.lamb * ((self.c-self.b) / (self.c-self.a)))
         
-#         self.mean = (self.a + (self.lamb*self.b) + self.c) / (2+self.lamb)
-#         self.var = ((self.mean-self.a) * (self.c-self.mean)) / (self.lamb+3)
+        self.mean = (self.a + (self.lamb*self.b) + self.c) / (2+self.lamb)
+        self.var = ((self.mean-self.a) * (self.c-self.mean)) / (self.lamb+3)
         
-#     @property
-#     def range(self):
-#         """ Calculates the min-max range
+    @property
+    def range(self):
+        """ Calculates the min-max range
         
-#         Returns
-#         -------
-#         Array:
-#             Array of range values of max-min.
-#         """
-#         return np.asarray(self.c - self.a)
+        Returns
+        -------
+        Array:
+            Array of range values of max-min.
+        """
+        return np.asarray(self.c - self.a)
     
-#     def median(self) -> float:
-#         median = (beta_dist(self.alpha, self.beta).median() * self.range) + self.a
-#         return median
+    def median(self) -> float:
+        median = (beta_dist(self.alpha, self.beta).median() * self.range) + self.a
+        return median
     
-#     def std(self) -> float:
-#         return np.sqrt(self.var)
+    def std(self) -> float:
+        return np.sqrt(self.var)
     
-#     def pdf(self, val:np.ndarray) -> np.ndarray:
-#         x = ((val - self.a) / self.range).clip(0,1)
-#         pdf_val = beta_dist.pdf(x, self.alpha, self.beta) / self.range
-#         return pdf_val
+    def pdf(self, val:np.ndarray) -> np.ndarray:
+        x = ((val - self.a) / self.range).clip(0,1)
+        pdf_val = beta_dist.pdf(x, self.alpha, self.beta) / self.range
+        return pdf_val
 
 
-# def mahalanobis_distance(x:float, expectancy:float, cov:float, absolute:bool = False) -> float:
-#     """Calculates the Mahalanobis distance between a vector x and a distribution
-#     with mean expectancy and covariance matrix cov. 
+def mahalanobis_distance(x:float, expectancy:float, cov:float, absolute:bool = False) -> float:
+    """Calculates the Mahalanobis distance between a vector x and a distribution
+    with mean expectancy and covariance matrix cov. 
 
-#     NOTE THIS IS WRONG - NEED TO FIX BUT NOT CURRENTLY USING IT.
+    NOTE THIS IS WRONG - NEED TO FIX BUT NOT CURRENTLY USING IT.
 
-#     Parameters:
-#         x (np.ndarray): Vector to calculate distance for
-#         expectancy (np.ndarray): Mean of distribution
-#         cov (np.ndarray): Covariance matrix of distribution
-#         abs (bool): Whether to take absolute value of distance
+    Parameters:
+        x (np.ndarray): Vector to calculate distance for
+        expectancy (np.ndarray): Mean of distribution
+        cov (np.ndarray): Covariance matrix of distribution
+        abs (bool): Whether to take absolute value of distance
 
-#     Returns:
-#         dist (np.ndarray): Mahalanobis distance 
-#     """
-#     dist = (x - expectancy) / cov
-#     if absolute:
-#         dist = abs(dist)
-#     return dist 
+    Returns:
+        dist (np.ndarray): Mahalanobis distance 
+    """
+    dist = (x - expectancy) / cov
+    if absolute:
+        dist = abs(dist)
+    return dist 
 
-# ## Generalised Histogram thresholding
+## Generalised Histogram thresholding
 
 
-# # If this code is shared with paper publication, add that this essentially copied from GHT paper
+# If this code is shared with paper publication, add that this essentially copied from GHT paper
 
-# # cumulative sum
-# csum = lambda z:np.cumsum(z)[:-1]
-# #de-cumulative sum
-# dsum = lambda z:np.cumsum(z[::-1])[-2::-1]
+# cumulative sum
+csum = lambda z:np.cumsum(z)[:-1]
+#de-cumulative sum
+dsum = lambda z:np.cumsum(z[::-1])[-2::-1]
 
-# # Use the mean for ties .
-# argmax = lambda x , f:np.mean(x[:-1][f==np.max(f)]) 
-# clip = lambda z:np.maximum(1e-30,z)
+# Use the mean for ties .
+argmax = lambda x , f:np.mean(x[:-1][f==np.max(f)]) 
+clip = lambda z:np.maximum(1e-30,z)
 
-# def image_hist(N, range = None):
-#     """ Generate bins and counts """
-#     image = N.ravel().astype(int)
-#     n = np.bincount(image,minlength = np.max(image) - np.min(image) + 1)
-#     if range != None:
-#         if len(range) != 2:
-#             raise TypeError('Range is not length 2')
-#         else:
-#             x = np.arange(range[0], range[1])    
-#     elif range == None:
-#         x = np.arange(0,np.max(image) + 1)
-#     else:
-#         raise TypeError("range input type not supported")
+def image_hist(N, range = None):
+    """ Generate bins and counts """
+    image = N.ravel().astype(int)
+    n = np.bincount(image,minlength = np.max(image) - np.min(image) + 1)
+    if range != None:
+        if len(range) != 2:
+            raise TypeError('Range is not length 2')
+        else:
+            x = np.arange(range[0], range[1])    
+    elif range == None:
+        x = np.arange(0,np.max(image) + 1)
+    else:
+        raise TypeError("range input type not supported")
     
-#     return n,x
+    return n,x
 
-# def preliminaries(n, x):
-#     """ Some math that is shared across each algorithm - refering to GHT, weighted percentile and Otsu"""
-#     assert np . all(n >= 0)
-#     x = np.arange(len(n), dtype=n.dtype) if x is None else x
-#     assert np . all(x[1:] >= x[: -1])
-#     w0 = clip(csum(n))
-#     w1 = clip(dsum(n))
-#     p0 = w0/(w0 + w1)
-#     p1 = w1/(w0 + w1)
-#     mu0 = csum(n*x)/w0
-#     mu1 = dsum(n*x)/w1
-#     d0 = csum(n*x**2)-w0*mu0**2
-#     d1 = dsum(n*x**2)-w1*mu1**2
-#     return x, w0, w1, p0, p1, mu0, mu1, d0, d1
+def preliminaries(n, x):
+    """ Some math that is shared across each algorithm - refering to GHT, weighted percentile and Otsu"""
+    assert np . all(n >= 0)
+    x = np.arange(len(n), dtype=n.dtype) if x is None else x
+    assert np . all(x[1:] >= x[: -1])
+    w0 = clip(csum(n))
+    w1 = clip(dsum(n))
+    p0 = w0/(w0 + w1)
+    p1 = w1/(w0 + w1)
+    mu0 = csum(n*x)/w0
+    mu1 = dsum(n*x)/w1
+    d0 = csum(n*x**2)-w0*mu0**2
+    d1 = dsum(n*x**2)-w1*mu1**2
+    return x, w0, w1, p0, p1, mu0, mu1, d0, d1
 
 
-# def GHT(n, x, nu=None, tau=0.1, kappa=0.1, omega=0.5):
-#     """ GHT implementation"""
-#     if nu == None:
-#         nu = abs(len(x)/2)
-#     assert nu >= 0
-#     assert tau >= 0
-#     assert kappa >= 0
-#     assert omega >= 0 and omega <= 1
-#     x, w0, w1, p0, p1, _, _, d0, d1 = preliminaries(n, x)
-#     v0 = clip((p0*nu*tau**2+d0)/(p0*nu+w0))
-#     v1 = clip((p1*nu*tau**2+d1)/(p1*nu+w1))
-#     f0 = - d0/v0-w0*np.log(v0) + 2*(w0+kappa*omega)*np.log(w0)
-#     f1 = - d1/v1-w1*np.log(v1)+2*\
-#         (w1+kappa*(1-omega))*np.log(w1)
-#     return argmax(x, f0+f1), f0+f1
+def GHT(n, x, nu=None, tau=0.1, kappa=0.1, omega=0.5):
+    """ GHT implementation"""
+    if nu == None:
+        nu = abs(len(x)/2)
+    assert nu >= 0
+    assert tau >= 0
+    assert kappa >= 0
+    assert omega >= 0 and omega <= 1
+    x, w0, w1, p0, p1, _, _, d0, d1 = preliminaries(n, x)
+    v0 = clip((p0*nu*tau**2+d0)/(p0*nu+w0))
+    v1 = clip((p1*nu*tau**2+d1)/(p1*nu+w1))
+    f0 = - d0/v0-w0*np.log(v0) + 2*(w0+kappa*omega)*np.log(w0)
+    f1 = - d1/v1-w1*np.log(v1)+2*\
+        (w1+kappa*(1-omega))*np.log(w1)
+    return argmax(x, f0+f1), f0+f1
 
-# ###
+###
 
 
 
