@@ -650,6 +650,7 @@ def permutation_likelihood_ratio_test(
 
     # Optional rank-transform
     if rank_based:
+        from scipy.stats import rankdata
         y = rankdata(y)
 
     y = jnp.array(y)

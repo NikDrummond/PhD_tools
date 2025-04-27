@@ -650,6 +650,7 @@ def permutation_likelihood_ratio_test(
 
     # Optional rank-transform
     if rank_based:
+        from scipy.stats import rankdata
         y = rankdata(y)
 
     y = jnp.array(y)
@@ -692,8 +693,6 @@ def permutation_likelihood_ratio_test(
         result['permuted_LRTs'] = np.array(permuted_LRTs)
 
     return result
-
-
 # PERT and distance functions - commenting this out for now
 
 # #### NOTE PDF DOES NOT RETURN A PROBABILITY - WILL OFTEN BE GREATER THAN 1
