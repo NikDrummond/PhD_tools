@@ -17,10 +17,11 @@ except ImportError:
 
 from scipy.stats import norm
 
-
 # -------------------
 # Grid computation
 # -------------------
+
+
 def _compute_x(
     data: np.ndarray, x0: Optional[float], x1: Optional[float], bins: Optional[int]
 ) -> np.ndarray:
@@ -561,8 +562,9 @@ def edf(
 # Histogram-based EPDF helpers
 # -------------------
 
-
-def _epdf_histogram_numpy(data: np.ndarray, x: np.ndarray) -> Tuple[np.ndarray, float]:
+def _epdf_histogram_numpy(
+    data: np.ndarray, x: np.ndarray
+) -> Tuple[np.ndarray, float]:
     """
     Compute histogram-based density estimates on grid midpoints x.
 
@@ -573,9 +575,11 @@ def _epdf_histogram_numpy(data: np.ndarray, x: np.ndarray) -> Tuple[np.ndarray, 
     width : float
         Bin width.
     """
+    # Construct bin edges so that midpoints match x
     edges = np.linspace(x[0], x[-1], x.size + 1)
     counts, _ = np.histogram(data, bins=edges)
     width = edges[1] - edges[0]
+    # density = count / (N * width)
     f = counts / (data.size * width)
     return f, width
 
@@ -601,234 +605,9 @@ def _ci_bootstrap_epdf_numpy(
     low_q, high_q = 100 * (alpha / 2), 100 * (1 - alpha / 2)
     return np.percentile(boot, low_q, axis=1), np.percentile(boot, high_q, axis=1)
 
-
-# -------------------
-# EPDF bootstrap (JAX)
-# -------------------
-if JAX_AVAILABLE:
-
-    @jit
-    def _single_boot_epdf_jax(
-        key: jnp.ndarray, data: jnp.ndarray, edges: jnp.ndarray
-    ) -> jnp.ndarray:
-        """
-        Single bootstrap replicate for histogram-based EPDF in JAX.
-        """
-        N = data.shape[0]
-        # sample indices with replacement
-        idx = jrandom.randint(key, (N,), 0, N)
-        samp = data[idx]
-        # assign to bins and count
-        bin_idx = jnp.digitize(samp, edges)
-        counts = jnp.bincount(bin_idx, length=edges.shape[0] + 1)[1:-1]
-        width = edges[1] - edges[0]
-        return counts / (N * width)
-
-    @partial(jit, static_argnums=(3,))
-    def _ci_bootstrap_epdf_jax_jit(
-        data: jnp.ndarray,
-        x: jnp.ndarray,
-        alpha: float,
-        samples: int,
-        base_key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        JIT-accelerated bootstrap CI for EPDF in JAX.
-        """
-        # construct bin edges
-        edges = jnp.linspace(x[0], x[-1], x.size + 1)
-        # split keys for replicates
-        keys = jrandom.split(base_key, samples)
-        # vectorize single bootstrap
-        boots = vmap(lambda k: _single_boot_epdf_jax(k, data, edges))(keys)
-        low_q = 100 * (alpha / 2)
-        high_q = 100 * (1 - alpha / 2)
-        lower = jnp.percentile(boots, low_q, axis=0)
-        upper = jnp.percentile(boots, high_q, axis=0)
-        return lower, upper
-
-    def _ci_bootstrap_epdf_jax(
-        data_np: np.ndarray, x_np: np.ndarray, alpha: float, samples: int, seed: int = 0
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Entry-point for JAX-bootstrapped EPDF CIs: converts inputs and calls JIT.
-        """
-        data_j = jnp.array(data_np)
-        x_j = jnp.array(x_np)
-        base_key = jrandom.PRNGKey(seed)
-        low_j, high_j = _ci_bootstrap_epdf_jax_jit(
-            data_j, x_j, alpha, samples, base_key
-        )
-        return np.array(low_j), np.array(high_j)
-
-
-# -------------------
-# EPDF envelope (JAX)
-# -------------------
-if JAX_AVAILABLE:
-
-    @jit
-    def _single_env_boot_jax(
-        key: jnp.ndarray, arr: jnp.ndarray, low_q: float, high_q: float
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Single bootstrap replicate for ID-level envelope in JAX.
-        """
-        nids = arr.shape[1]
-        idx = jrandom.randint(key, (nids,), 0, nids)
-        samp = arr[:, idx]
-        low = jnp.percentile(samp, 100 * low_q, axis=1)
-        high = jnp.percentile(samp, 100 * high_q, axis=1)
-        return low, high
-
-    @partial(jit, static_argnums=(3,))
-    def _env_bootstrap_jax_jit(
-        arr: jnp.ndarray,
-        low_q: float,
-        high_q: float,
-        samples: int,
-        base_key: jnp.ndarray,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        JIT-accelerated bootstrap envelope for ID variability in JAX.
-        """
-        keys = jrandom.split(base_key, samples)
-        boots = vmap(lambda k: _single_env_boot_jax(k, arr, low_q, high_q))(keys)
-        lows = jnp.stack([b[0] for b in boots], axis=1)
-        highs = jnp.stack([b[1] for b in boots], axis=1)
-        return lows.mean(axis=1), highs.mean(axis=1)
-
-    def _env_bootstrap_jax(
-        arr_np: np.ndarray, low_q: float, high_q: float, samples: int, seed: int = 0
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Entry-point for JAX-bootstrapped ID envelope: converts inputs and calls JIT.
-        """
-        arr_j = jnp.array(arr_np)
-        base_key = jrandom.PRNGKey(seed)
-        low_j, high_j = _env_bootstrap_jax_jit(arr_j, low_q, high_q, samples, base_key)
-        return np.array(low_j), np.array(high_j)
-
-
-# -------------------
-# EPDF computation helpers
-# -------------------
-# -------------------
-
-
-def _compute_group_epdf(
-    data: np.ndarray,
-    x: np.ndarray,
-    ci_method: Literal["dkw", "asymptotic", "bootstrap"],
-    ci_alpha: float,
-    ci_bootstrap_samples: int,
-    rng: np.random.Generator,
-    use_jax: bool,
-    seed: int = 0,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute histogram-based EPDF and its confidence bounds for a single group.
-    """
-    N = data.size
-    f_vals, width = _epdf_histogram_numpy(data, x)
-    if ci_method == "dkw":
-        half = np.sqrt(np.log(2.0 / ci_alpha) / (2 * N)) / width
-        l = np.clip(f_vals - half, 0, None)
-        u = f_vals + half
-    elif ci_method == "asymptotic":
-        p = f_vals * width
-        std_p = np.sqrt(p * (1 - p) / N)
-        half = norm.ppf(1 - ci_alpha / 2) * (std_p / width)
-        l = np.clip(f_vals - half, 0, None)
-        u = f_vals + half
-    else:
-        if use_jax and JAX_AVAILABLE:
-            l, u = _ci_bootstrap_epdf_jax(data, x, ci_alpha, ci_bootstrap_samples, seed)
-        else:
-            l, u = _ci_bootstrap_epdf_numpy(
-                data, x, ci_alpha, ci_bootstrap_samples, rng
-            )
-    return f_vals, l, u
-
-
-def _compute_id_epdf(
-    df, y: str, id_col: str, x: np.ndarray
-) -> Tuple[np.ndarray, List[Any]]:
-    """
-    Compute histogram-based EPDF curves for each ID.
-    """
-    id_labels = df[id_col].unique().tolist()
-    f_id = np.empty((x.size, len(id_labels)))
-    for i, iid in enumerate(id_labels):
-        data_i = df[df[id_col] == iid][y].to_numpy(dtype=float)
-        f_id[:, i], _ = _epdf_histogram_numpy(data_i, x)
-    return f_id, id_labels
-
-
-def _compute_envelope(
-    arr: np.ndarray,
-    grp_keys: List[Any],
-    df,
-    id_col: str,
-    id_labels: List[Any],
-    envelope_method: Literal["percentile", "minmax", "bootstrap", "mad", "asymmad"],
-    env_quantiles: Tuple[float, float],
-    env_bootstrap_samples: int,
-    envelope_scale: float,
-    envelope_scale_lower: float,
-    envelope_scale_upper: float,
-    rng: np.random.Generator,
-    use_jax: bool,
-    seed: int = 0,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Compute ID-level variability envelope for each group.
-    """
-    n_bins, n_groups = arr.shape[0], len(grp_keys)
-    env_l = np.empty((n_bins, n_groups))
-    env_u = np.empty((n_bins, n_groups))
-    for j, key in enumerate(grp_keys):
-        ids = (
-            df[df[id_col] == key][id_col].unique().tolist()
-            if key in df.columns
-            else id_labels
-        )
-        idxs = [id_labels.index(i) for i in ids]
-        sub = arr[:, idxs]
-        if envelope_method == "percentile":
-            env_l[:, j], env_u[:, j] = np.percentile(
-                sub, [100 * env_quantiles[0], 100 * env_quantiles[1]], axis=1
-            )
-        elif envelope_method == "minmax":
-            env_l[:, j], env_u[:, j] = sub.min(axis=1), sub.max(axis=1)
-        elif envelope_method == "mad":
-            med = np.median(sub, axis=1)
-            mad = np.median(np.abs(sub - med[:, None]), axis=1)
-            env_l[:, j] = np.clip(med - envelope_scale * mad, 0, None)
-            env_u[:, j] = np.clip(med + envelope_scale * mad, 0, None)
-        elif envelope_method == "asymmad":
-            med = np.median(sub, axis=1)
-            dev = sub - med[:, None]
-            mad_lo = np.median(np.abs(np.where(dev < 0, dev, 0)), axis=1)
-            mad_hi = np.median(np.abs(np.where(dev > 0, dev, 0)), axis=1)
-            env_l[:, j] = np.clip(med - envelope_scale_lower * mad_lo, 0, None)
-            env_u[:, j] = np.clip(med + envelope_scale_upper * mad_hi, 0, None)
-        else:
-            if use_jax and JAX_AVAILABLE:
-                env_l[:, j], env_u[:, j] = _env_bootstrap_jax(
-                    sub, env_quantiles[0], env_quantiles[1], env_bootstrap_samples, seed
-                )
-            else:
-                env_l[:, j], env_u[:, j] = _env_bootstrap_numpy(
-                    sub, env_quantiles[0], env_quantiles[1], env_bootstrap_samples, rng
-                )
-    return env_l, env_u
-
-
 # -------------------
 # EPDFResult container
 # -------------------
-
 
 class EPDFResult:
     """
@@ -879,7 +658,9 @@ class EPDFResult:
         self.env_upper = env_upper
 
     def __repr__(self) -> str:
-        desc = f"EPDFResult(x={self.x.shape}, f={self.f.shape}, groups={self.group_labels})"
+        desc = (
+            f"EPDFResult(x={self.x.shape}, f={self.f.shape}, groups={self.group_labels})"
+        )
         if self.id_labels is not None:
             desc = desc[:-1] + f", ids={self.id_labels})"
         return desc
@@ -913,7 +694,6 @@ class EPDFResult:
         ax : matplotlib.axes.Axes
             The matplotlib axes containing the plot.
         """
-
         if ax is None:
             fig, ax = plt.subplots()
         if colors is None:
@@ -925,9 +705,7 @@ class EPDFResult:
         for idx, label in enumerate(self.group_labels):
             col = colors[idx % len(colors)] if colors is not None else None
             ax.plot(self.x, self.f[:, idx], label=str(label), color=col, **plot_kwargs)
-            ax.fill_between(
-                self.x, self.l[:, idx], self.u[:, idx], alpha=alpha_ci, color=col
-            )
+            ax.fill_between(self.x, self.l[:, idx], self.u[:, idx], alpha=alpha_ci, color=col)
             if envelope and self.env_lower is not None:
                 ax.fill_between(
                     self.x,
@@ -941,11 +719,9 @@ class EPDFResult:
         ax.legend()
         return ax
 
-
 # -------------------
 # Main EPDF function
 # -------------------
-
 
 def epdf(
     df,
@@ -966,8 +742,6 @@ def epdf(
     x0: Optional[float] = None,
     x1: Optional[float] = None,
     bins: Optional[int] = None,
-    use_jax: bool = False,
-    seed: int = 0,
 ) -> EPDFResult:
     """
     Compute histogram-based empirical probability density functions (EPDFs) with optional grouping, ID-level curves, confidence intervals, and envelope bands.
@@ -1030,9 +804,13 @@ def epdf(
         - id_labels : labels for IDs or None
         - env_lower, env_upper : envelope bounds per group, or None
     """
+    # Data and grid
     values = df[y].to_numpy(dtype=float)
+    # Reuse EDF grid logic
     x = _compute_x(values, x0, x1, bins)
-    # Determine groups
+    n_bins = x.size
+
+    # Group and ID keys
     if group is not None:
         grp_keys = df[group].unique().tolist()
     elif id is not None:
@@ -1041,13 +819,15 @@ def epdf(
         grp_keys = ["all"]
     n_groups = len(grp_keys)
 
-    # Prepare output arrays
-    f_out = np.empty((x.size, n_groups))
-    l_out = np.empty((x.size, n_groups))
-    u_out = np.empty((x.size, n_groups))
+    id_labels = df[id].unique().tolist() if id is not None else None
 
-    rng = np.random.default_rng(seed)
-    # Group-level EPDF
+    # Initialize outputs
+    f_out = np.empty((n_bins, n_groups))
+    l_out = np.empty((n_bins, n_groups))
+    u_out = np.empty((n_bins, n_groups))
+    rng = np.random.default_rng()
+
+    # Compute per-group densities and CIs
     for j, key in enumerate(grp_keys):
         if group is None and id is None:
             data_j = values
@@ -1055,36 +835,72 @@ def epdf(
             data_j = df[df[group] == key][y].to_numpy(dtype=float)
         else:
             data_j = df[df[id] == key][y].to_numpy(dtype=float)
-        f_out[:, j], l_out[:, j], u_out[:, j] = _compute_group_epdf(
-            data_j, x, ci_method, ci_alpha, ci_bootstrap_samples, rng, use_jax, seed
-        )
+        N = data_j.size
 
-    # ID-level EPDF
-    if id is not None:
-        f_id, id_labels = _compute_id_epdf(df, y, id, x)
-    else:
-        f_id, id_labels = None, None
+        # Histogram density
+        f_vals, width = _epdf_histogram_numpy(data_j, x)
+        f_out[:, j] = f_vals
 
-    # Envelope
+        # Confidence intervals
+        if ci_method == "dkw":
+            half_cdf = _ci_dkw_numpy(N, ci_alpha)
+            half_pdf = half_cdf / width
+            l_out[:, j] = np.clip(f_vals - half_pdf, 0, None)
+            u_out[:, j] = f_vals + half_pdf
+        elif ci_method == "asymptotic":
+            # p = counts/N; std_p = sqrt(p(1-p)/N)
+            # std_f = std_p/width
+            # reuse asymptotic logic on probabilities then scale
+            p = f_vals * width
+            std_p = np.sqrt(p * (1 - p) / N)
+            half = norm.ppf(1 - ci_alpha / 2) * (std_p / width)
+            l_out[:, j] = np.clip(f_vals - half, 0, None)
+            u_out[:, j] = f_vals + half
+        else:
+            low_b, high_b = _ci_bootstrap_epdf_numpy(
+                data_j, x, ci_alpha, ci_bootstrap_samples, rng
+            )
+            l_out[:, j], u_out[:, j] = low_b, high_b
+
+    # ID-level density curves
     if id is not None:
-        env_l, env_u = _compute_envelope(
-            f_id,
-            grp_keys,
-            df,
-            id,
-            id_labels,
-            envelope_method,
-            env_quantiles,
-            env_bootstrap_samples,
-            envelope_scale,
-            envelope_scale_lower,
-            envelope_scale_upper,
-            rng,
-            use_jax,
-            seed,
-        )
+        f_id = np.empty((n_bins, len(id_labels)))
+        for i, iid in enumerate(id_labels):
+            data_i = df[df[id] == iid][y].to_numpy(dtype=float)
+            f_id[:, i], _ = _epdf_histogram_numpy(data_i, x)
     else:
-        env_l, env_u = None, None
+        f_id = None
+
+    # Envelope if IDs provided
+    env_lower = None
+    env_upper = None
+    if id is not None:
+        env_lower = np.empty_like(f_out)
+        env_upper = np.empty_like(f_out)
+        for j, key in enumerate(grp_keys):
+            if group is not None:
+                ids_in_g = df[df[group] == key][id].unique().tolist()
+                idxs = [id_labels.index(iid) for iid in ids_in_g]
+            else:
+                idxs = [j]
+            arr = f_id[:, idxs]
+            if envelope_method == "percentile":
+                env_lower[:, j], env_upper[:, j] = _env_percentile_numpy(
+                    arr, env_quantiles[0], env_quantiles[1]
+                )
+            elif envelope_method == "minmax":
+                env_lower[:, j], env_upper[:, j] = _env_minmax_numpy(arr)
+            elif envelope_method == "mad":
+                env_lower[:, j], env_upper[:, j] = _env_mad_numpy(arr, envelope_scale)
+            elif envelope_method == "asymmad":
+                env_lower[:, j], env_upper[:, j] = _env_asymmad_numpy(
+                    arr, envelope_scale_lower, envelope_scale_upper
+                )
+            else:
+                low_e, high_e = _env_bootstrap_numpy(
+                    arr, env_quantiles[0], env_quantiles[1], env_bootstrap_samples, rng
+                )
+                env_lower[:, j], env_upper[:, j] = low_e, high_e
 
     return EPDFResult(
         x=x,
@@ -1094,6 +910,6 @@ def epdf(
         group_labels=grp_keys,
         y_id=f_id,
         id_labels=id_labels,
-        env_lower=env_l,
-        env_upper=env_u,
+        env_lower=env_lower,
+        env_upper=env_upper,
     )
