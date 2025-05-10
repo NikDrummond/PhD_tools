@@ -3,15 +3,6 @@ import matplotlib.pyplot as plt
 from typing import Optional, List, Any, Tuple, Literal
 from scipy.stats import norm
 
-
-import pandas as pd
-import numpy as np
-import jax.numpy as jnp
-from jax import random, vmap, jit
-from jax.ops import segment_sum
-from functools import partial
-from itertools import combinations
-
 # Optional JAX imports
 try:
     import jax
@@ -733,7 +724,7 @@ def _compute_group_histogram(
     rng: np.random.Generator,
     use_jax: bool,
     seed: int,
-    type: Literal["mass", "density", "count"] = "mass",
+    type: Literal["mass", "density", "count"] = "mass"
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute histogram-based estimates and CIs for a single group.
@@ -816,25 +807,21 @@ def _compute_group_histogram(
 
     else:  # bootstrap
         if use_jax and JAX_AVAILABLE:
-            low, high = _ci_bootstrap_epdf_jax(
-                data, x, ci_alpha, ci_bootstrap_samples, seed
-            )
+            low, high = _ci_bootstrap_epdf_jax(data, x, ci_alpha, ci_bootstrap_samples, seed)
         else:
-            low, high = _ci_bootstrap_epdf_numpy(
-                data, x, ci_alpha, ci_bootstrap_samples, rng
-            )
+            low, high = _ci_bootstrap_epdf_numpy(data, x, ci_alpha, ci_bootstrap_samples, rng)
 
         # low/high returned in *density* units by bootstrap helper
         if type == "count":
-            low = low * N * width
+            low  = low  * N * width
             high = high * N * width
         elif type == "mass":
             # convert densities→counts→normalize
-            c_low = low * N * width
-            c_high = high * N * width
-            denom_low = c_low.sum() or 1.0
+            c_low  = (low  * N * width)
+            c_high = (high * N * width)
+            denom_low  = c_low.sum()  or 1.0
             denom_high = c_high.sum() or 1.0
-            low = c_low / denom_low
+            low  = c_low  / denom_low
             high = c_high / denom_high
 
         l, u = low, high
@@ -847,7 +834,7 @@ def _compute_id_histogram(
     y: str,
     id_col: str,
     x: np.ndarray,
-    type: Literal["mass", "density", "count"] = "mass",
+    type: Literal["mass", "density", "count"] = "mass"
 ) -> Tuple[np.ndarray, List[Any]]:
     """
     Compute per-ID histogram estimates (mass, density, or counts).
@@ -1077,7 +1064,6 @@ class HistogramResult:
 # Main EPDF function
 # -------------------
 
-
 def histogram(
     df,
     y: str,
@@ -1146,38 +1132,23 @@ def histogram(
         elif group is not None:
             data_j = df[df[group] == key][y].to_numpy(dtype=float)
         else:
-            data_j = df[df[id] == key][y].to_numpy(dtype=float)
+            data_j = df[df[id]    == key][y].to_numpy(dtype=float)
 
-        f_out[:, j], l_out[:, j], u_out[:, j] = _compute_group_histogram(
-            data_j,
-            x,
-            ci_method,
-            ci_alpha,
-            ci_bootstrap_samples,
-            rng,
-            use_jax,
-            seed,
-            type,
+        f_out[:,j], l_out[:,j], u_out[:,j] = _compute_group_histogram(
+            data_j, x,
+            ci_method, ci_alpha, ci_bootstrap_samples,
+            rng, use_jax, seed,
+            type
         )
 
     # per-ID curves & envelope… exactly as before, passing along `type`
     if id is not None:
         f_id, id_labels = _compute_id_histogram(df, y, id, x, type)
         env_l, env_u = _compute_envelope(
-            f_id,
-            grp_keys,
-            df,
-            id,
-            id_labels,
-            envelope_method,
-            env_quantiles,
-            env_bootstrap_samples,
-            envelope_scale,
-            envelope_scale_lower,
-            envelope_scale_upper,
-            rng,
-            use_jax,
-            seed,
+            f_id, grp_keys, df, id, id_labels,
+            envelope_method, env_quantiles, env_bootstrap_samples,
+            envelope_scale, envelope_scale_lower, envelope_scale_upper,
+            rng, use_jax, seed
         )
     else:
         f_id = id_labels = env_l = env_u = None
@@ -1196,38 +1167,46 @@ def histogram(
     )
 
 
+
 ### Permutation ANOVA and post-hoc
 
+import pandas as pd
+import numpy as np
+import jax.numpy as jnp
+from jax import random, vmap, jit
+from jax.ops import segment_sum
+from functools import partial
+from itertools import combinations
 
 # -----------------------------------------------------------------------------
 # Core JAX ANOVA helpers
 # -----------------------------------------------------------------------------
 
-
 @partial(jit, static_argnums=(2,))
-def compute_ss_jax(
-    y: jnp.ndarray, groups: jnp.ndarray, num_groups: int, eps: float = 1e-12
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    μ = jnp.mean(y)
+def compute_ss_jax(y: jnp.ndarray,
+                   groups: jnp.ndarray,
+                   num_groups: int,
+                   eps: float = 1e-12
+                  ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    μ  = jnp.mean(y)
     gs = segment_sum(y, groups, num_segments=num_groups)
     gc = segment_sum(jnp.ones_like(y), groups, num_segments=num_groups)
     gm = gs / gc
     resid_within = y - gm[groups]
-    resid_total = y - μ
+    resid_total  = y - μ
     ssw = jnp.sum(resid_within**2) + eps
-    sst = jnp.sum(resid_total**2) + eps
+    sst = jnp.sum(resid_total**2)  + eps
     return ssw, sst, μ
-
 
 @partial(jit, static_argnums=(1,))
 def compute_logL_jax(ss: jnp.ndarray, n: int) -> jnp.ndarray:
-    return -0.5 * n * (jnp.log(2 * jnp.pi) + jnp.log(ss / n) + 1)
-
+    return -0.5 * n * (jnp.log(2*jnp.pi) + jnp.log(ss/n) + 1)
 
 @partial(jit, static_argnums=(2,))
-def compute_anova_stats_jax(
-    y: jnp.ndarray, groups: jnp.ndarray, num_groups: int
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+def compute_anova_stats_jax(y: jnp.ndarray,
+                            groups: jnp.ndarray,
+                            num_groups: int
+                           ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     ssw, sst, μ = compute_ss_jax(y, groups, num_groups)
     n = y.shape[0]
     k = num_groups
@@ -1236,39 +1215,36 @@ def compute_anova_stats_jax(
     ssb = sst - ssw
     msb = ssb / dfb
     msw = ssw / dfw
-    F = msb / msw
-    omega2 = (ssb - dfb * msw) / (sst + msw)
+    F      = msb / msw
+    omega2 = (ssb - dfb*msw) / (sst + msw)
     return F, omega2, μ
-
 
 # -----------------------------------------------------------------------------
 # FUSED ANOVA (one jit, one compile)
 # -----------------------------------------------------------------------------
 
-
 @partial(jit, static_argnums=(2,))
-def jax_anova_all(
-    y: jnp.ndarray,
-    groups: jnp.ndarray,
-    num_groups: int,
-    perm_keys: jnp.ndarray,
-    boot_keys: jnp.ndarray,
-    ci: float = 0.95,
-) -> tuple[
-    jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
-]:
+def jax_anova_all(y: jnp.ndarray,
+                  groups: jnp.ndarray,
+                  num_groups: int,
+                  perm_keys: jnp.ndarray,
+                  boot_keys: jnp.ndarray,
+                  ci: float = 0.95
+                 ) -> tuple[
+                     jnp.ndarray, jnp.ndarray,
+                     jnp.ndarray, jnp.ndarray,
+                     jnp.ndarray, jnp.ndarray
+                 ]:
     # observed F & ω²
     F_obs, ω2_obs, μ = compute_anova_stats_jax(y, groups, num_groups)
 
     # 1) F permutations (Freedman–Lane residual)
     resid = y - μ
-
     def _oneF(k):
         pr = random.permutation(k, resid)
         yp = μ + pr
         Fp, _, _ = compute_anova_stats_jax(yp, groups, num_groups)
         return Fp
-
     perm_Fs = vmap(_oneF)(perm_keys)
 
     # 2) ω² bootstrap
@@ -1277,91 +1253,86 @@ def jax_anova_all(
         yb = μ + rb
         _, w2b, _ = compute_anova_stats_jax(yb, groups, num_groups)
         return w2b
-
     ω2_boot = vmap(_oneω2)(boot_keys)
 
     # 3) percentile CI
-    lo = jnp.percentile(ω2_boot, (1 - ci) / 2 * 100)
-    hi = jnp.percentile(ω2_boot, (1 + ci) / 2 * 100)
+    lo = jnp.percentile(ω2_boot, (1-ci)/2*100)
+    hi = jnp.percentile(ω2_boot, (1+ci)/2*100)
 
     return F_obs, perm_Fs, ω2_obs, ω2_boot, lo, hi
-
 
 # -----------------------------------------------------------------------------
 # High-level ANOVA wrapper
 # -----------------------------------------------------------------------------
-
 
 def residual_permutation_anova(
     df: pd.DataFrame,
     group_col: str,
     value_col: str,
     num_permutations: int = 1000,
-    num_bootstrap: int = 1000,
-    ci: float = 0.95,
-    seed: int = 42,
-    return_distributions: bool = False,
+    num_bootstrap:    int = 1000,
+    ci:               float = 0.95,
+    seed:             int   = 42,
+    return_distributions: bool = False
 ) -> dict:
     if df[group_col].nunique() < 2:
         raise ValueError("Need at least two groups.")
-    y = pd.to_numeric(df[value_col], errors="raise").values
+    y = pd.to_numeric(df[value_col], errors='raise').values
     labels, uniques = pd.factorize(df[group_col])
     n, k = len(y), len(uniques)
 
-    y_jax = jnp.array(y)
+    y_jax   = jnp.array(y)
     grp_jax = jnp.array(labels)
 
-    perm_keys = random.split(random.PRNGKey(seed), num_permutations)
-    boot_keys = random.split(random.PRNGKey(seed + 1), num_bootstrap)
+    perm_keys = random.split(random.PRNGKey(seed),      num_permutations)
+    boot_keys = random.split(random.PRNGKey(seed + 1),  num_bootstrap)
 
     F_obs_j, perm_Fs_j, ω2_obs_j, ω2_boot_j, lo_j, hi_j = jax_anova_all(
         y_jax, grp_jax, k, perm_keys, boot_keys, ci
     )
 
     # back to Python scalars/arrays
-    F_obs = float(F_obs_j)
+    F_obs  = float(F_obs_j)
     ω2_obs = float(ω2_obs_j)
-    ci_lo = float(lo_j)
-    ci_hi = float(hi_j)
+    ci_lo  = float(lo_j)
+    ci_hi  = float(hi_j)
     perm_Fs = np.array(perm_Fs_j)
     ω2_boot = np.array(ω2_boot_j)
 
     # AIC / BIC as before
-    logL0 = float(compute_logL_jax(jnp.array(np.sum((y - y.mean()) ** 2)), n))
-    logL1 = float(compute_logL_jax(jnp.array(np.sum((y - y_jax.mean()) ** 2)), n))
-    AIC0, AIC1 = 2 * 1 - 2 * logL0, 2 * k - 2 * logL1
-    BIC0, BIC1 = np.log(n) * 1 - 2 * logL0, np.log(n) * k - 2 * logL1
+    logL0 = float(compute_logL_jax(jnp.array(np.sum((y - y.mean())**2)), n))
+    logL1 = float(compute_logL_jax(jnp.array(np.sum((y - y_jax.mean())**2)), n))
+    AIC0, AIC1 = 2*1-2*logL0, 2*k-2*logL1
+    BIC0, BIC1 = np.log(n)*1-2*logL0, np.log(n)*k-2*logL1
 
     p_value = float((perm_Fs >= F_obs).sum() + 1) / (num_permutations + 1)
-    alpha = 1 / np.sqrt(n)
-    sig = p_value < alpha
+    alpha   = 1/np.sqrt(n)
+    sig     = p_value < alpha
 
     out = {
-        "F_statistic": F_obs,
-        "p_value": p_value,
-        "omega_squared": ω2_obs,
-        "omega2_ci": (ci_lo, ci_hi),
-        "alpha_adaptive": alpha,
-        "significant_adaptive": sig,
-        "AIC_null": AIC0,
-        "AIC_full": AIC1,
-        "delta_AIC": AIC0 - AIC1,
-        "BIC_null": BIC0,
-        "BIC_full": BIC1,
-        "delta_BIC": BIC0 - BIC1,
+      'F_statistic':         F_obs,
+      'p_value':             p_value,
+      'omega_squared':       ω2_obs,
+      'omega2_ci':           (ci_lo, ci_hi),
+      'alpha_adaptive':      alpha,
+      'significant_adaptive':sig,
+      'AIC_null':            AIC0,
+      'AIC_full':            AIC1,
+      'delta_AIC':           AIC0 - AIC1,
+      'BIC_null':            BIC0,
+      'BIC_full':            BIC1,
+      'delta_BIC':           BIC0 - BIC1
     }
     if return_distributions:
-        out["perm_Fs"] = perm_Fs
-        out["omega2_bootstrap"] = ω2_boot
+        out['perm_Fs']        = perm_Fs
+        out['omega2_bootstrap']= ω2_boot
     return out
-
 
 # -----------------------------------------------------------------------------
 # Pairwise post-hoc kernel (static sizes fix tracer error)
 # -----------------------------------------------------------------------------
 
-
-@partial(jit, static_argnums=(5, 6))
+@partial(jit, static_argnums=(5,6))
 def jax_pairwise_permutation_cohend(
     y1: jnp.ndarray,
     y2: jnp.ndarray,
@@ -1369,36 +1340,26 @@ def jax_pairwise_permutation_cohend(
     boot_keys: jnp.ndarray,
     ci: float,
     c1: int,
-    c2: int,
+    c2: int
 ) -> tuple[
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
-    jnp.ndarray,
+    jnp.ndarray, jnp.ndarray, jnp.ndarray,
+    jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray
 ]:
     """
     c1, c2 are Python ints (group sizes) and marked static_argnums.
     """
     obs_diff = jnp.mean(y1) - jnp.mean(y2)
-    obs_d = obs_diff / jnp.sqrt(
-        ((c1 - 1) * jnp.var(y1, ddof=1) + (c2 - 1) * jnp.var(y2, ddof=1))
-        / (c1 + c2 - 2)
+    obs_d    = obs_diff / jnp.sqrt(
+        ((c1-1)*jnp.var(y1,ddof=1) + (c2-1)*jnp.var(y2,ddof=1)) / (c1+c2-2)
     )
 
     pooled = jnp.concatenate([y1, y2])
-
     # permutation distribution
     def _perm(key):
         p = random.permutation(key, pooled)
-        return jnp.mean(p[:c1]) - jnp.mean(p[c1 : c1 + c2])
-
+        return jnp.mean(p[:c1]) - jnp.mean(p[c1:c1+c2])
     perm_diffs = vmap(_perm)(perm_keys)
-    p_raw = (jnp.sum(jnp.abs(perm_diffs) >= jnp.abs(obs_diff)) + 1) / (
-        perm_keys.shape[0] + 1
-    )
+    p_raw = (jnp.sum(jnp.abs(perm_diffs) >= jnp.abs(obs_diff)) + 1) / (perm_keys.shape[0]+1)
 
     # bootstrap Cohen’s d
     def _boot(key):
@@ -1406,77 +1367,69 @@ def jax_pairwise_permutation_cohend(
         b2 = random.choice(key, y2, shape=(c2,), replace=True)
         s1 = jnp.var(b1, ddof=1)
         s2 = jnp.var(b2, ddof=1)
-        psd = jnp.sqrt(((c1 - 1) * s1 + (c2 - 1) * s2) / (c1 + c2 - 2))
-        return (jnp.mean(b1) - jnp.mean(b2)) / psd
-
+        psd = jnp.sqrt(((c1-1)*s1 + (c2-1)*s2)/(c1+c2-2))
+        return (jnp.mean(b1)-jnp.mean(b2))/psd
     d_boot = vmap(_boot)(boot_keys)
-    lo = jnp.percentile(d_boot, (1 - ci) / 2 * 100)
-    hi = jnp.percentile(d_boot, (1 + ci) / 2 * 100)
+    lo = jnp.percentile(d_boot, (1-ci)/2*100)
+    hi = jnp.percentile(d_boot, (1+ci)/2*100)
 
     return obs_diff, perm_diffs, p_raw, obs_d, d_boot, lo, hi
-
 
 # -----------------------------------------------------------------------------
 # P-value adjustment
 # -----------------------------------------------------------------------------
 
-
-def adjust_pvalues(pvals: np.ndarray, method: str = "bonferroni") -> np.ndarray:
+def adjust_pvalues(pvals: np.ndarray, method: str = 'bonferroni') -> np.ndarray:
     p = np.asarray(pvals)
     m = len(p)
-    if method == "bonferroni":
-        return np.minimum(p * m, 1.0)
+    if method=='bonferroni':
+        return np.minimum(p*m, 1.0)
     idx = np.argsort(p)
-    sp = p[idx]
-    cum = np.minimum.accumulate((m / np.arange(1, m + 1)) * sp[::-1])[::-1]
-    out = np.empty(m)
-    out[idx] = np.minimum(cum, 1.0)
+    sp  = p[idx]
+    cum = np.minimum.accumulate((m/np.arange(1,m+1))*sp[::-1])[::-1]
+    out = np.empty(m); out[idx] = np.minimum(cum,1.0)
     return out
-
 
 # -----------------------------------------------------------------------------
 # High-level post-hoc wrapper
 # -----------------------------------------------------------------------------
-
 
 def posthoc_pairwise_permutation(
     df: pd.DataFrame,
     group_col: str,
     value_col: str,
     num_permutations: int = 1000,
-    num_bootstrap: int = 1000,
-    ci: float = 0.95,
-    p_adjust: str = "bonferroni",
-    seed: int = 42,
+    num_bootstrap:    int = 1000,
+    ci:               float = 0.95,
+    p_adjust:         str   = 'bonferroni',
+    seed:             int   = 42
 ) -> pd.DataFrame:
-    y = pd.to_numeric(df[value_col], errors="raise").values
+    y = pd.to_numeric(df[value_col], errors='raise').values
     labels, uniques = pd.factorize(df[group_col])
 
-    perm_keys = random.split(random.PRNGKey(seed), num_permutations)
+    perm_keys = random.split(random.PRNGKey(seed),     num_permutations)
     boot_keys = random.split(random.PRNGKey(seed + 1), num_bootstrap)
 
     rows = []
-    for i, j in combinations(range(len(uniques)), 2):
-        y1 = jnp.array(y[labels == i])
-        y2 = jnp.array(y[labels == j])
+    for (i,j) in combinations(range(len(uniques)), 2):
+        y1 = jnp.array(y[labels==i])
+        y2 = jnp.array(y[labels==j])
         c1, c2 = y1.shape[0], y2.shape[0]
 
         od, pdiffs, p_raw, od_d, dboot, lo, hi = jax_pairwise_permutation_cohend(
             y1, y2, perm_keys, boot_keys, ci, c1, c2
         )
 
-        rows.append(
-            {
-                "group1": uniques[i],
-                "group2": uniques[j],
-                "mean_diff": float(od),
-                "cohen_d": float(od_d),
-                "ci_lower": float(lo),
-                "ci_upper": float(hi),
-                "p_raw": float(p_raw),
-            }
-        )
+        rows.append({
+          'group1':   uniques[i],
+          'group2':   uniques[j],
+          'mean_diff': float(od),
+          'cohen_d':   float(od_d),
+          'ci_lower':  float(lo),
+          'ci_upper':  float(hi),
+          'p_raw':     float(p_raw)
+        })
 
     df_out = pd.DataFrame(rows)
-    df_out["p_adj"] = adjust_pvalues(df_out["p_raw"].values, method=p_adjust)
+    df_out['p_adj'] = adjust_pvalues(df_out['p_raw'].values, method=p_adjust)
     return df_out
