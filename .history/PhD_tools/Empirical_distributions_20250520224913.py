@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional, List, Tuple, Any, Callable, Dict
+from typing import Optional, List, Tuple, Any, Callable
 from scipy.stats import norm
 import warnings  # For more controllable warnings
+
+# ... (All other functions remain the same as in the previous corrected version) ...
+# --- Grid & CI Utilities ---
 
 
 def compute_grid(
@@ -566,195 +569,6 @@ class DistributionResult:
             else f"Data ('{self.y_col_name}') were used in original units."
         )
 
-    def plot(
-        self,
-        ax: Optional[plt.Axes] = None,
-        colors: Optional[List[Any]] = None,
-        ci_alpha: float = 0.3,
-        env_alpha: float = 0.15,
-        show_envelope: bool = True,
-        plot_log_x: bool = False,
-        plot_log_y: bool = False,
-        group_labels: Optional[List[str]] = None,  # Added parameter
-        plot_kwargs: Optional[Dict[str, Any]] = None,  # Added parameter
-        fill_kwargs: Optional[Dict[str, Any]] = None,  # Added parameter
-        legend_kwargs: Optional[Dict[str, Any]] = None,  # Added parameter
-        **kwargs,  # Kept for backward compatibility or other potential uses
-    ) -> plt.Axes:
-        """
-        Plots the estimated distribution(s).
-
-        Parameters
-        ----------
-        ax : Optional[plt.Axes], default=None
-            The matplotlib Axes object to plot on. If None, a new figure and Axes
-            are created.
-        colors : Optional[List[Any]], default=None
-            A list of colors to use for plotting each group. If None, the default
-            matplotlib color cycle is used.
-        ci_alpha : float, default=0.3
-            The alpha (transparency) value for the confidence interval fill.
-        env_alpha : float, default=0.15
-            The alpha (transparency) value for the envelope fill.
-        show_envelope : bool, default=True
-            Whether to plot the envelope (e.g., prediction interval).
-        plot_log_x : bool, default=False
-            If True, the x-axis will be set to a logarithmic scale.
-        plot_log_y : bool = False
-            If True, the y-axis will be set to a logarithmic scale.
-        group_labels : Optional[List[str]], default=None
-            Manually set the labels for each plotted group. If None, the labels
-            from `self.group_labels` will be used.
-        plot_kwargs : Optional[Dict[str, Any]], default=None
-            Additional keyword arguments passed directly to `ax.plot()` for the
-            main distribution lines. For example: `{'linestyle': '--', 'linewidth': 2}`.
-        fill_kwargs : Optional[Dict[str, Any]], default=None
-            Additional keyword arguments passed directly to `ax.fill_between()` for
-            both confidence intervals and envelopes. These will override `ci_alpha`
-            and `env_alpha` if `alpha` is specified within `fill_kwargs`.
-            For example: `{'edgecolor': 'blue', 'alpha': 0.2}`.
-        legend_kwargs : Optional[Dict[str, Any]], default=None
-            Additional keyword arguments passed directly to `ax.legend()`.
-            For example: `{'frameon': False, 'loc': 'upper left'}`.
-        **kwargs
-            Additional keyword arguments. These are primarily kept for potential
-            future extensions or specific uses not covered by `plot_kwargs`
-            or `fill_kwargs`. Note that if keys overlap with `plot_kwargs`
-            or `fill_kwargs`, the dedicated dictionaries will take precedence.
-
-        Returns
-        -------
-        plt.Axes
-            The matplotlib Axes object with the plotted distribution(s).
-
-        Raises
-        ------
-        ValueError
-            If `plot_log_x` is True and x-values (possibly already log-transformed)
-            contain non-positive entries.
-        """
-        if ax is None:
-            _, ax = plt.subplots()
-
-        if colors is None:
-            colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
-        # Initialize kwargs dictionaries
-        plot_kwargs = plot_kwargs if plot_kwargs is not None else {}
-        fill_kwargs = fill_kwargs if fill_kwargs is not None else {}
-        legend_kwargs = legend_kwargs if legend_kwargs is not None else {}
-
-        # Use provided group_labels or fall back to self.group_labels
-        current_group_labels = (
-            group_labels if group_labels is not None else self.group_labels
-        )
-
-        y_plot = self.y if self.y.ndim == 2 else self.y[:, np.newaxis]
-        l_plot = self.l if self.l.ndim == 2 else self.l[:, np.newaxis]
-        u_plot = self.u if self.u.ndim == 2 else self.u[:, np.newaxis]
-
-        env_l_plot = None
-        if self.env_l is not None:
-            env_l_plot = (
-                self.env_l if self.env_l.ndim == 2 else self.env_l[:, np.newaxis]
-            )
-        env_u_plot = None
-        if self.env_u is not None:
-            env_u_plot = (
-                self.env_u if self.env_u.ndim == 2 else self.env_u[:, np.newaxis]
-            )
-
-        for i, label in enumerate(current_group_labels):
-            if i >= y_plot.shape[1]:  # Should not happen if data constructed correctly
-                warnings.warn(
-                    f"Group label index {i} exceeds available data columns ({y_plot.shape[1]}). Skipping plot for '{label}'.",
-                    UserWarning,
-                )
-                continue
-
-            color = colors[i % len(colors)]
-            ax.plot(self.x, y_plot[:, i], label=str(label), color=color, **plot_kwargs)
-
-            # Only plot fill_between if CIs are not all NaN for this group
-            if not np.all(np.isnan(l_plot[:, i])) and not np.all(
-                np.isnan(u_plot[:, i])
-            ):
-                ci_fill_kwargs = {
-                    "alpha": ci_alpha,
-                    "color": color,
-                    "edgecolor": "none",
-                }
-                ci_fill_kwargs.update(fill_kwargs)  # fill_kwargs can override defaults
-                ax.fill_between(
-                    self.x,
-                    l_plot[:, i],
-                    u_plot[:, i],
-                    **ci_fill_kwargs,
-                )
-
-            if (
-                show_envelope
-                and env_l_plot is not None
-                and env_u_plot is not None
-                and i < env_l_plot.shape[1]
-                and i < env_u_plot.shape[1]
-                and not np.all(np.isnan(env_l_plot[:, i]))
-                and not np.all(np.isnan(env_u_plot[:, i]))
-            ):
-                env_fill_kwargs = {
-                    "alpha": env_alpha,
-                    "color": color,
-                    "linestyle": "--",
-                    "edgecolor": "none",
-                }
-                env_fill_kwargs.update(fill_kwargs)  # fill_kwargs can override defaults
-                ax.fill_between(
-                    self.x,
-                    env_l_plot[:, i],
-                    env_u_plot[:, i],
-                    **env_fill_kwargs,
-                )
-
-        xlabel_text = self.y_col_name
-        if self.log_data:
-            xlabel_text = f"log({self.y_col_name})"
-
-        if plot_log_x:
-            if self.log_data:
-                warnings.warn(
-                    f"Plotting log of x-axis which represents log-transformed data: log(log({self.y_col_name})). Ensure this is intended.",
-                    UserWarning,
-                )
-            if np.any(self.x[~np.isnan(self.x)] <= 0):  # Check non-NaN values
-                raise ValueError(
-                    "Cannot use log-x axis: x-values (possibly already log-transformed) "
-                    "contain non-positive entries."
-                )
-            ax.set_xscale("log")
-
-        ax.set_xlabel(xlabel_text)
-
-        if plot_log_y:
-            plottable_y_data = [
-                arr for arr in [y_plot, l_plot, u_plot] if arr is not None
-            ]
-            if any(np.any(arr_y[~np.isnan(arr_y)] <= 0) for arr_y in plottable_y_data):
-                warnings.warn(
-                    "Some y-values or CI bounds are non-positive. Log-y axis may clip or omit these.",
-                    UserWarning,
-                )
-            ax.set_yscale("log")
-
-        ylabel_text = self.kind.capitalize()
-        ax.set_ylabel(ylabel_text)
-
-        if current_group_labels and (
-            len(current_group_labels) > 1
-            or (len(current_group_labels) == 1 and current_group_labels[0] != "all")
-        ):
-            ax.legend(**legend_kwargs)  # Pass legend_kwargs here
-        ax.set_title(self.log_note)
-        return ax
 
 
 def compute_distribution(
@@ -839,7 +653,7 @@ def compute_distribution(
         # To avoid double logging or logging user-provided transformed grid values:
         # Apply log to df_proc[y_col] only ONCE, and do it before grid decision if grid is auto.
         if np.any(
-            df_proc[y_col].to_numpy(dtype=float) <= 0
+            df_proc[y_col].to_numpy(dtype=float, na_action="ignore") <= 0
         ):  # Check current state of y_col
             raise ValueError(
                 f"Cannot log-transform data in column '{y_col}': it contains non-positive values."
@@ -1079,55 +893,6 @@ def compute_distribution(
         env_u=final_env_u,
         log_data=log_data,
     )
-
-
-def add_figure_label(ax, label, position="top left", x_offset=0, y_offset=0, **kwargs):
-    """
-    Adds a scientific figure label (e.g., 'A', 'B') to a Matplotlib axes object.
-
-    Args:
-        ax (matplotlib.axes.Axes): The axes object to add the label to.
-        label (str): The string label (e.g., 'A', 'B').
-        position (str, optional): General position of the label.
-                                  Can be 'top left', 'top right', 'bottom left', 'bottom right'.
-                                  Defaults to 'top left'.
-        x_offset (float, optional): Horizontal offset from the calculated position in axes coordinates.
-                                    Positive moves right, negative moves left. Defaults to 0.
-        y_offset (float, optional): Vertical offset from the calculated position in axes coordinates.
-                                    Positive moves up, negative moves down. Defaults to 0.
-        **kwargs: Additional keyword arguments to pass to ax.text()
-                  (e.g., fontsize, fontweight, color, etc.).
-    """
-    # Determine the initial x, y coordinates based on the position
-    # using axes coordinates (0,0 is bottom-left, 1,1 is top-right of the axes)
-    if position == "top left":
-        x_base, y_base = 0.02, 0.98  # Start slightly in from the top-left corner
-        ha = "left"  # Horizontal alignment
-        va = "top"  # Vertical alignment
-    elif position == "top right":
-        x_base, y_base = 0.98, 0.98
-        ha = "right"
-        va = "top"
-    elif position == "bottom left":
-        x_base, y_base = 0.02, 0.02
-        ha = "left"
-        va = "bottom"
-    elif position == "bottom right":
-        x_base, y_base = 0.98, 0.02
-        ha = "right"
-        va = "bottom"
-    else:
-        raise ValueError(
-            "Invalid 'position'. Must be 'top left', 'top right', 'bottom left', or 'bottom right'."
-        )
-
-    # Apply offsets
-    x = x_base + x_offset
-    y = y_base + y_offset
-
-    # Add the text. `transform=ax.transAxes` is crucial here:
-    # it means x and y are interpreted as fractions of the axes' width and height.
-    ax.text(x, y, label, transform=ax.transAxes, ha=ha, va=va, **kwargs)
 
 
 # ### Permutation ANOVA and post-hoc

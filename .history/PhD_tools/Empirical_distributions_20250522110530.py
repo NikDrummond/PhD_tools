@@ -1080,8 +1080,7 @@ def compute_distribution(
         log_data=log_data,
     )
 
-
-def add_figure_label(ax, label, position="top left", x_offset=0, y_offset=0, **kwargs):
+def add_figure_label(ax, label, position='top left', x_offset=0, y_offset=0, **kwargs):
     """
     Adds a scientific figure label (e.g., 'A', 'B') to a Matplotlib axes object.
 
@@ -1100,26 +1099,24 @@ def add_figure_label(ax, label, position="top left", x_offset=0, y_offset=0, **k
     """
     # Determine the initial x, y coordinates based on the position
     # using axes coordinates (0,0 is bottom-left, 1,1 is top-right of the axes)
-    if position == "top left":
+    if position == 'top left':
         x_base, y_base = 0.02, 0.98  # Start slightly in from the top-left corner
-        ha = "left"  # Horizontal alignment
-        va = "top"  # Vertical alignment
-    elif position == "top right":
+        ha = 'left'  # Horizontal alignment
+        va = 'top'   # Vertical alignment
+    elif position == 'top right':
         x_base, y_base = 0.98, 0.98
-        ha = "right"
-        va = "top"
-    elif position == "bottom left":
+        ha = 'right'
+        va = 'top'
+    elif position == 'bottom left':
         x_base, y_base = 0.02, 0.02
-        ha = "left"
-        va = "bottom"
-    elif position == "bottom right":
+        ha = 'left'
+        va = 'bottom'
+    elif position == 'bottom right':
         x_base, y_base = 0.98, 0.02
-        ha = "right"
-        va = "bottom"
+        ha = 'right'
+        va = 'bottom'
     else:
-        raise ValueError(
-            "Invalid 'position'. Must be 'top left', 'top right', 'bottom left', or 'bottom right'."
-        )
+        raise ValueError("Invalid 'position'. Must be 'top left', 'top right', 'bottom left', or 'bottom right'.")
 
     # Apply offsets
     x = x_base + x_offset
@@ -1127,9 +1124,9 @@ def add_figure_label(ax, label, position="top left", x_offset=0, y_offset=0, **k
 
     # Add the text. `transform=ax.transAxes` is crucial here:
     # it means x and y are interpreted as fractions of the axes' width and height.
-    ax.text(x, y, label, transform=ax.transAxes, ha=ha, va=va, **kwargs)
-
-
+    ax.text(x, y, label, transform=ax.transAxes,
+            ha=ha, va=va,
+            **kwargs)
 # ### Permutation ANOVA and post-hoc
 # # -----------------------------------------------------------------------------
 # # JAX ANOVA CORE

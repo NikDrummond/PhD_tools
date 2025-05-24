@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional, List, Tuple, Any, Callable, Dict
+from typing import Optional, List, Tuple, Any, Callable
 from scipy.stats import norm
 import warnings  # For more controllable warnings
+
+# ... (All other functions remain the same as in the previous corrected version) ...
+# --- Grid & CI Utilities ---
 
 
 def compute_grid(
@@ -645,9 +648,7 @@ class DistributionResult:
         legend_kwargs = legend_kwargs if legend_kwargs is not None else {}
 
         # Use provided group_labels or fall back to self.group_labels
-        current_group_labels = (
-            group_labels if group_labels is not None else self.group_labels
-        )
+        current_group_labels = group_labels if group_labels is not None else self.group_labels
 
         y_plot = self.y if self.y.ndim == 2 else self.y[:, np.newaxis]
         l_plot = self.l if self.l.ndim == 2 else self.l[:, np.newaxis]
@@ -679,11 +680,7 @@ class DistributionResult:
             if not np.all(np.isnan(l_plot[:, i])) and not np.all(
                 np.isnan(u_plot[:, i])
             ):
-                ci_fill_kwargs = {
-                    "alpha": ci_alpha,
-                    "color": color,
-                    "edgecolor": "none",
-                }
+                ci_fill_kwargs = {"alpha": ci_alpha, "color": color, "edgecolor": "none"}
                 ci_fill_kwargs.update(fill_kwargs)  # fill_kwargs can override defaults
                 ax.fill_between(
                     self.x,
@@ -701,12 +698,7 @@ class DistributionResult:
                 and not np.all(np.isnan(env_l_plot[:, i]))
                 and not np.all(np.isnan(env_u_plot[:, i]))
             ):
-                env_fill_kwargs = {
-                    "alpha": env_alpha,
-                    "color": color,
-                    "linestyle": "--",
-                    "edgecolor": "none",
-                }
+                env_fill_kwargs = {"alpha": env_alpha, "color": color, "linestyle": "--", "edgecolor": "none"}
                 env_fill_kwargs.update(fill_kwargs)  # fill_kwargs can override defaults
                 ax.fill_between(
                     self.x,
@@ -752,10 +744,9 @@ class DistributionResult:
             len(current_group_labels) > 1
             or (len(current_group_labels) == 1 and current_group_labels[0] != "all")
         ):
-            ax.legend(**legend_kwargs)  # Pass legend_kwargs here
+            ax.legend(**legend_kwargs) # Pass legend_kwargs here
         ax.set_title(self.log_note)
         return ax
-
 
 def compute_distribution(
     df: pd.DataFrame,
@@ -839,7 +830,7 @@ def compute_distribution(
         # To avoid double logging or logging user-provided transformed grid values:
         # Apply log to df_proc[y_col] only ONCE, and do it before grid decision if grid is auto.
         if np.any(
-            df_proc[y_col].to_numpy(dtype=float) <= 0
+            df_proc[y_col].to_numpy(dtype=float, na_action="ignore") <= 0
         ):  # Check current state of y_col
             raise ValueError(
                 f"Cannot log-transform data in column '{y_col}': it contains non-positive values."
@@ -1079,55 +1070,6 @@ def compute_distribution(
         env_u=final_env_u,
         log_data=log_data,
     )
-
-
-def add_figure_label(ax, label, position="top left", x_offset=0, y_offset=0, **kwargs):
-    """
-    Adds a scientific figure label (e.g., 'A', 'B') to a Matplotlib axes object.
-
-    Args:
-        ax (matplotlib.axes.Axes): The axes object to add the label to.
-        label (str): The string label (e.g., 'A', 'B').
-        position (str, optional): General position of the label.
-                                  Can be 'top left', 'top right', 'bottom left', 'bottom right'.
-                                  Defaults to 'top left'.
-        x_offset (float, optional): Horizontal offset from the calculated position in axes coordinates.
-                                    Positive moves right, negative moves left. Defaults to 0.
-        y_offset (float, optional): Vertical offset from the calculated position in axes coordinates.
-                                    Positive moves up, negative moves down. Defaults to 0.
-        **kwargs: Additional keyword arguments to pass to ax.text()
-                  (e.g., fontsize, fontweight, color, etc.).
-    """
-    # Determine the initial x, y coordinates based on the position
-    # using axes coordinates (0,0 is bottom-left, 1,1 is top-right of the axes)
-    if position == "top left":
-        x_base, y_base = 0.02, 0.98  # Start slightly in from the top-left corner
-        ha = "left"  # Horizontal alignment
-        va = "top"  # Vertical alignment
-    elif position == "top right":
-        x_base, y_base = 0.98, 0.98
-        ha = "right"
-        va = "top"
-    elif position == "bottom left":
-        x_base, y_base = 0.02, 0.02
-        ha = "left"
-        va = "bottom"
-    elif position == "bottom right":
-        x_base, y_base = 0.98, 0.02
-        ha = "right"
-        va = "bottom"
-    else:
-        raise ValueError(
-            "Invalid 'position'. Must be 'top left', 'top right', 'bottom left', or 'bottom right'."
-        )
-
-    # Apply offsets
-    x = x_base + x_offset
-    y = y_base + y_offset
-
-    # Add the text. `transform=ax.transAxes` is crucial here:
-    # it means x and y are interpreted as fractions of the axes' width and height.
-    ax.text(x, y, label, transform=ax.transAxes, ha=ha, va=va, **kwargs)
 
 
 # ### Permutation ANOVA and post-hoc
