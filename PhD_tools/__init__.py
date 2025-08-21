@@ -16,3 +16,4 @@ from .general_helpers import *
 from .plot_2d import *
 from .Empirical_distributions import *
 from .Compare_groups import *
+from .dist_fitter import *
